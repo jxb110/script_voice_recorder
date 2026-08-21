@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appendWaveformSample, normalizeMetering, resampleWaveform } from "@/lib/waveform-math";
+import { appendWaveformSample, classifyWaveformSample, normalizeMetering, resampleWaveform, waveformDisplayStrength } from "@/lib/waveform-math";
 
 describe("录音波形数据转换", () => {
   it("将 Android 的负分贝计量归一化为可绘制强度", () => {
@@ -27,5 +27,12 @@ describe("录音波形数据转换", () => {
     expect(bars).toHaveLength(3);
     expect(Math.max(...bars)).toBeGreaterThan(0.8);
     expect(bars.at(-1)).toBeGreaterThan(0.7);
+  });
+
+  it("将静音段绘制为低平基线，并放大有声段的可观察变化", () => {
+    expect(classifyWaveformSample(normalizeMetering(-65)!)).toBe("silence");
+    expect(classifyWaveformSample(normalizeMetering(-25)!)).toBe("voice");
+    expect(waveformDisplayStrength(normalizeMetering(-65)!)).toBe(0);
+    expect(waveformDisplayStrength(normalizeMetering(-25)!)).toBeGreaterThan(0.6);
   });
 });

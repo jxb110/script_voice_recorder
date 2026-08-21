@@ -1,10 +1,23 @@
 const MINIMUM_SAMPLE = 0.025;
 export const MAX_WAVEFORM_SAMPLES = 720;
+export const WAVEFORM_SILENCE_THRESHOLD = 0.2;
+
+export type WaveformSegmentKind = "silence" | "voice";
 
 export function normalizeMetering(level?: number) {
   if (typeof level !== "number" || !Number.isFinite(level)) return null;
   if (level > 0 && level <= 1) return Math.max(MINIMUM_SAMPLE, level);
   return Math.min(1, Math.max(MINIMUM_SAMPLE, (level + 70) / 70));
+}
+
+export function classifyWaveformSample(sample: number): WaveformSegmentKind {
+  return sample <= WAVEFORM_SILENCE_THRESHOLD ? "silence" : "voice";
+}
+
+export function waveformDisplayStrength(sample: number) {
+  if (classifyWaveformSample(sample) === "silence") return 0;
+  const activeRange = (sample - WAVEFORM_SILENCE_THRESHOLD) / (1 - WAVEFORM_SILENCE_THRESHOLD);
+  return Math.pow(Math.min(1, Math.max(0, activeRange)), 0.58);
 }
 
 export function appendWaveformSample(samples: number[], level?: number, maximum = MAX_WAVEFORM_SAMPLES) {
