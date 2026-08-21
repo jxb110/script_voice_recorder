@@ -2,7 +2,7 @@ export type Gender = "女" | "男" | "其他";
 
 export type Speaker = { id: string; name: string; gender: Gender; age: number; createdAt: string };
 export type ScriptToken = { char: string; pinyin?: string };
-export type ScriptSentence = { id: string; index: number; prompt: string; rawText: string; tokens: ScriptToken[]; recordingUri?: string; recordedAt?: string };
+export type ScriptSentence = { id: string; index: number; prompt: string; rawText: string; tokens: ScriptToken[]; recordingUri?: string; recordedAt?: string; waveform?: number[] };
 export type ScriptProject = { id: string; name: string; sourceFileName: string; sourceFileUri?: string; speakerId: string; sentences: ScriptSentence[]; createdAt: string; updatedAt: string };
 export type RecorderSettings = { sampleRate: number; bitRate: number; channels: 1 | 2; leadingSilenceMs: number; trailingSilenceMs: number };
 export type RecorderStore = { speakers: Speaker[]; projects: ScriptProject[]; settings: RecorderSettings };

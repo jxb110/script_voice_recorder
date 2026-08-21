@@ -21,7 +21,7 @@ type RecorderContextValue = {
   deleteProject: (projectId: string) => void;
   replaceProjectScript: (projectId: string, replacement: ScriptReplacement) => void;
   updateSettings: (input: RecorderSettings) => void;
-  saveSentenceRecording: (projectId: string, sentenceId: string, sourceUri: string) => Promise<string>;
+  saveSentenceRecording: (projectId: string, sentenceId: string, sourceUri: string, waveform?: number[]) => Promise<string>;
 };
 
 const RecorderContext = createContext<RecorderContextValue | null>(null);
@@ -87,7 +87,7 @@ export function RecorderProvider({ children }: PropsWithChildren) {
 
   const updateSettings = useCallback((settings: RecorderSettings) => commit((current) => ({ ...current, settings })), [commit]);
 
-  const saveSentenceRecording = useCallback(async (projectId: string, sentenceId: string, sourceUri: string) => {
+  const saveSentenceRecording = useCallback(async (projectId: string, sentenceId: string, sourceUri: string, waveform?: number[]) => {
     const project = store.projects.find((item) => item.id === projectId);
     if (!project) throw new Error("录音任务不存在。");
     const speaker = store.speakers.find((item) => item.id === project.speakerId);
@@ -97,7 +97,7 @@ export function RecorderProvider({ children }: PropsWithChildren) {
     const persistedUri = await persistRecording(sourceUri, project, sentence, speaker);
     commit((current) => ({
       ...current,
-      projects: current.projects.map((item) => item.id !== projectId ? item : { ...item, updatedAt: new Date().toISOString(), sentences: item.sentences.map((line) => line.id === sentenceId ? { ...line, recordingUri: persistedUri, recordedAt: new Date().toISOString() } : line) }),
+      projects: current.projects.map((item) => item.id !== projectId ? item : { ...item, updatedAt: new Date().toISOString(), sentences: item.sentences.map((line) => line.id === sentenceId ? { ...line, recordingUri: persistedUri, recordedAt: new Date().toISOString(), waveform } : line) }),
     }));
     return persistedUri;
   }, [commit, store.projects, store.speakers]);

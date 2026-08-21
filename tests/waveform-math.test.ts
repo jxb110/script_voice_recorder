@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appendWaveformSample, normalizeMetering } from "@/lib/waveform-math";
+import { appendWaveformSample, normalizeMetering, resampleWaveform } from "@/lib/waveform-math";
 
 describe("录音波形数据转换", () => {
   it("将 Android 的负分贝计量归一化为可绘制强度", () => {
@@ -15,9 +15,17 @@ describe("录音波形数据转换", () => {
     expect(appendWaveformSample(samples, undefined, 3)).toEqual(samples);
   });
 
-  it("持续保留固定数量的平滑采样点", () => {
+  it("超过显示上限时压缩波形序列而非只保留末尾采样", () => {
     const next = appendWaveformSample([0.1, 0.2, 0.3], -10, 3);
-    expect(next).toHaveLength(3);
+    expect(next.length).toBeLessThanOrEqual(3);
+    expect(next[0]).toBeGreaterThan(0.1);
     expect(next.at(-1)).toBeGreaterThan(0.3);
+  });
+
+  it("为播放视图重采样完整录制包络，并保留前后峰值", () => {
+    const bars = resampleWaveform([0.1, 0.9, 0.2, 0.15, 0.8], 3);
+    expect(bars).toHaveLength(3);
+    expect(Math.max(...bars)).toBeGreaterThan(0.8);
+    expect(bars.at(-1)).toBeGreaterThan(0.7);
   });
 });

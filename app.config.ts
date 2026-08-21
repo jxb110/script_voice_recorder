@@ -87,6 +87,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    "expo-localization",
     "expo-asset",
     "expo-font",
     "expo-web-browser",
