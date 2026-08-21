@@ -57,8 +57,9 @@ function parseTokenSentence(value: unknown, index: number, inheritedPrompt = "")
   if (value && typeof value === "object") {
     const source = value as Record<string, unknown>;
     const prompt = String(source.prompt ?? source.Mark ?? source.hint ?? inheritedPrompt ?? "").trim();
-    const rawText = String(source.text ?? source.rawText ?? source.script ?? source.reading ?? source.content ?? "");
-    if (Array.isArray(source.tokens)) return parseTokenSentence(source.tokens, index, prompt);
+    const tokenEntries = [source.tokens, source.chars, source.text, source.content].find((candidate) => Array.isArray(candidate));
+    if (Array.isArray(tokenEntries)) return parseTokenSentence(tokenEntries, index, prompt);
+    const rawText = [source.text, source.rawText, source.script, source.reading, source.content].find((candidate): candidate is string => typeof candidate === "string") ?? "";
     return rawText.trim() ? makeSentence(index, rawText, prompt) : null;
   }
   return typeof value === "string" && value.trim() ? makeSentence(index, value, inheritedPrompt) : null;
@@ -70,7 +71,8 @@ export function parseScriptContent(content: string, fileName: string): ScriptSen
   if (fileName.toLowerCase().endsWith(".json") || normalized.startsWith("[")) {
     try {
       const parsed = JSON.parse(normalized) as unknown;
-      const values = Array.isArray(parsed) ? parsed : [parsed];
+      const rootSentences = parsed && typeof parsed === "object" && !Array.isArray(parsed) && Array.isArray((parsed as { sentences?: unknown }).sentences) ? (parsed as { sentences: unknown[] }).sentences : undefined;
+      const values = Array.isArray(parsed) ? parsed : rootSentences ?? [parsed];
       const isSingleTokenSequence = values.length > 0 && values.some((entry) => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) && "char" in entry) && values.every((entry) => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) && !("tokens" in entry) && ("char" in entry || "Mark" in entry));
       const sentences = (isSingleTokenSequence ? [values] : values)
         .map((value, index) => parseTokenSentence(value, index + 1))

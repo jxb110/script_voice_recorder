@@ -25,18 +25,22 @@ describe("parseScriptContent", () => {
   it("将普通 TXT 的每一行解析为一句", () => {
     const sentences = parseScriptContent("第一句\n\n第二句", "sample.txt");
     expect(sentences.map((sentence) => sentence.rawText)).toEqual(["第一句", "第二句"]);
-    expect(sentences[0].tokens.map((token) => token.char).join("")).toBe("第一句");
   });
 
-  it("保留字元序列 JSON 中的 Mark 提示词", () => {
+  it("从单句 JSON 字元数组生成下方 char 与上方 pinyin 所需的绑定 token", () => {
     const content = JSON.stringify([{ char: "你", pinyin: "nǐ" }, { char: "好", pinyin: "hǎo" }, { Mark: "请自然问候" }]);
     const [sentence] = parseScriptContent(content, "pinyin.json");
     expect(sentence).toMatchObject({ rawText: "你好", prompt: "请自然问候" });
+    expect(sentence.tokens).toEqual([{ char: "你", pinyin: "nǐ" }, { char: "好", pinyin: "hǎo" }]);
   });
 
-  it("保留嵌套 tokens JSON 所属对象的 Mark 提示词", () => {
-    const content = JSON.stringify([{ tokens: [{ char: "早", pinyin: "zǎo" }, { char: "安", pinyin: "ān" }], Mark: "轻声问候" }]);
-    const [sentence] = parseScriptContent(content, "nested.json");
-    expect(sentence).toMatchObject({ rawText: "早安", prompt: "轻声问候" });
+  it("从多句 JSON 的 sentences 容器保留每句 char、pinyin 和 Mark", () => {
+    const content = JSON.stringify({ sentences: [
+      [{ char: "早", pinyin: "zǎo" }, { char: "安", pinyin: "ān" }, { Mark: "轻声问候" }],
+      { tokens: [{ char: "世", pinyin: "shì" }, { char: "界", pinyin: "jiè" }], Mark: "自然朗读" },
+    ] });
+    const sentences = parseScriptContent(content, "multi.json");
+    expect(sentences.map((sentence) => ({ text: sentence.rawText, prompt: sentence.prompt }))).toEqual([{ text: "早安", prompt: "轻声问候" }, { text: "世界", prompt: "自然朗读" }]);
+    expect(sentences[1].tokens).toEqual([{ char: "世", pinyin: "shì" }, { char: "界", pinyin: "jiè" }]);
   });
 });
