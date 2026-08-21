@@ -1,0 +1,5 @@
+[{ "char": "你1", "pinyin": "nǐ" },{ "char": "好", "pinyin": "hǎo" },{ "char": "世", "pinyin": "shì" },{ "char": "界", "pinyin": "jiè" },{"Mark":"提示词1"}]
+[{ "char": "你2", "pinyin": "nǐ" },{ "char": "好", "pinyin": "hǎo" },{ "char": "世", "pinyin": "shì" },{ "char": "界", "pinyin": "jiè" },{"Mark":"提示词1"}]
+[{ "char": "你3", "pinyin": "nǐ" },{ "char": "好", "pinyin": "hǎo" },{ "char": "世", "pinyin": "shì" },{ "char": "界", "pinyin": "jiè" },{"Mark":"提示词3"}]
+[{ "char": "你4", "pinyin": "nǐ" },{ "char": "好", "pinyin": "hǎo" },{ "char": "世", "pinyin": "shì" },{ "char": "界", "pinyin": "jiè" },{"Mark":"提示词4"}]
+[{ "char": "你5", "pinyin": "nǐ" },{ "char": "好", "pinyin": "hǎo" },{ "char": "世", "pinyin": "shì" },{ "char": "界", "pinyin": "jiè" },{"Mark":"提示词5"}]
