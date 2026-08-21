@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import * as FileSystem from "expo-file-system/legacy";
+import * as MediaLibrary from "expo-media-library";
 import { Platform } from "react-native";
 
 import type { ScriptProject, ScriptSentence, ScriptToken, Speaker } from "@/shared/recorder-types";
@@ -77,6 +78,23 @@ export async function persistRecording(sourceUri: string, project: ScriptProject
   if ((await FileSystem.getInfoAsync(destination)).exists) await FileSystem.deleteAsync(destination, { idempotent: true });
   await FileSystem.copyAsync({ from: sourceUri, to: destination });
   return destination;
+}
+
+export async function exportRecordingToPublicWaveDirectory(privateUri: string, project: ScriptProject, speaker: Speaker) {
+  if (Platform.OS !== "android") return undefined;
+  let permission = await MediaLibrary.getPermissionsAsync(true, ["audio"]);
+  if (!permission.granted) permission = await MediaLibrary.requestPermissionsAsync(true, ["audio"]);
+  if (!permission.granted) throw new Error("未获得保存音频到手机公共目录的权限。录音已保留在应用内部目录。");
+
+  const albumName = `record_jxb/wave/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}`;
+  const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
+  if (existingAlbum) {
+    const asset = await MediaLibrary.createAssetAsync(privateUri, existingAlbum);
+    return asset.uri;
+  }
+  const firstAsset = await MediaLibrary.createAssetAsync(privateUri);
+  const album = await MediaLibrary.createAlbumAsync(albumName, firstAsset, false);
+  return album ? firstAsset.uri : undefined;
 }
 
 function base64ToBytes(value: string) {

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 
-import { deleteProjectLocalFiles, persistRecording } from "@/lib/recorder-files";
+import { deleteProjectLocalFiles, exportRecordingToPublicWaveDirectory, persistRecording } from "@/lib/recorder-files";
 import { canReplaceProjectScript } from "@/lib/project-rules";
 import { DEFAULT_RECORDER_SETTINGS, type RecorderSettings, type RecorderStore, type ScriptProject, type ScriptSentence, type Speaker } from "@/shared/recorder-types";
 
@@ -21,7 +21,7 @@ type RecorderContextValue = {
   deleteProject: (projectId: string) => void;
   replaceProjectScript: (projectId: string, replacement: ScriptReplacement) => void;
   updateSettings: (input: RecorderSettings) => void;
-  saveSentenceRecording: (projectId: string, sentenceId: string, sourceUri: string, waveform?: number[]) => Promise<string>;
+  saveSentenceRecording: (projectId: string, sentenceId: string, sourceUri: string, waveform?: number[]) => Promise<{ recordingUri: string; publicUri?: string; publicExportError?: string }>;
 };
 
 const RecorderContext = createContext<RecorderContextValue | null>(null);
@@ -95,11 +95,15 @@ export function RecorderProvider({ children }: PropsWithChildren) {
     const sentence = project.sentences.find((item) => item.id === sentenceId);
     if (!sentence) throw new Error("当前句子不存在。");
     const persistedUri = await persistRecording(sourceUri, project, sentence, speaker);
+    let publicUri: string | undefined;
+    let publicExportError: string | undefined;
+    try { publicUri = await exportRecordingToPublicWaveDirectory(persistedUri, project, speaker); }
+    catch (error) { publicExportError = error instanceof Error ? error.message : "录音未能导出到手机公共目录。"; }
     commit((current) => ({
       ...current,
-      projects: current.projects.map((item) => item.id !== projectId ? item : { ...item, updatedAt: new Date().toISOString(), sentences: item.sentences.map((line) => line.id === sentenceId ? { ...line, recordingUri: persistedUri, recordedAt: new Date().toISOString(), waveform } : line) }),
+      projects: current.projects.map((item) => item.id !== projectId ? item : { ...item, updatedAt: new Date().toISOString(), sentences: item.sentences.map((line) => line.id === sentenceId ? { ...line, recordingUri: persistedUri, publicUri, recordedAt: new Date().toISOString(), waveform } : line) }),
     }));
-    return persistedUri;
+    return { recordingUri: persistedUri, publicUri, publicExportError };
   }, [commit, store.projects, store.speakers]);
 
   const value = useMemo(() => ({ loaded, ...store, createSpeaker, updateSpeaker, createProject, deleteProject, replaceProjectScript, updateSettings, saveSentenceRecording }), [createProject, createSpeaker, deleteProject, loaded, replaceProjectScript, saveSentenceRecording, store, updateSettings, updateSpeaker]);

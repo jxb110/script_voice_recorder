@@ -72,7 +72,7 @@ export default function RecordingScreen() {
     try {
       setPhase("trailing"); await pause(settings.trailingSilenceMs); await recorder.stop(); const uri = recorder.uri;
       if (!uri) throw new Error("Recording file was not created.");
-      setPhase("saving"); await saveSentenceRecording(project.id, sentence.id, uri, liveWaveform); notify(Haptics.ImpactFeedbackStyle.Medium); setPhase("idle"); setCurrentIndex((value) => Math.min(value + 1, total - 1));
+      setPhase("saving"); const result = await saveSentenceRecording(project.id, sentence.id, uri, liveWaveform); notify(Haptics.ImpactFeedbackStyle.Medium); setPhase("idle"); if (result.publicExportError) Alert.alert("录音已保存", result.publicExportError); setCurrentIndex((value) => Math.min(value + 1, total - 1));
     } catch (error) { setPhase("idle"); Alert.alert("Unable to save recording", error instanceof Error ? error.message : "Try recording this sentence again."); }
   };
   const togglePlay = async () => {

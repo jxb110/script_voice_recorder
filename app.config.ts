@@ -88,6 +88,13 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "expo-localization",
+    [
+      "expo-media-library",
+      {
+        "savePhotosPermission": "Allow $(PRODUCT_NAME) to save recorded audio to your device.",
+        "granularPermissions": ["audio"]
+      }
+    ],
     "expo-asset",
     "expo-font",
     "expo-web-browser",

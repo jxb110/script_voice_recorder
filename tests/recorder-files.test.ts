@@ -5,6 +5,9 @@ vi.mock("expo-file-system/legacy", () => ({
   EncodingType: { UTF8: "utf8", Base64: "base64" },
   getInfoAsync: vi.fn(), makeDirectoryAsync: vi.fn(), copyAsync: vi.fn(), deleteAsync: vi.fn(), readAsStringAsync: vi.fn(), writeAsStringAsync: vi.fn(),
 }));
+vi.mock("expo-media-library", () => ({
+  getPermissionsAsync: vi.fn(), requestPermissionsAsync: vi.fn(), getAlbumAsync: vi.fn(), createAssetAsync: vi.fn(), createAlbumAsync: vi.fn(),
+}));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 
 import { parseScriptContent } from "@/lib/recorder-files";
