@@ -43,7 +43,7 @@
 
 ## 文件快传
 
-“文件快传”会在手机**保持应用前台**时开启一个临时局域网地址。将手机与电脑或另一台手机连接到同一 Wi-Fi 后，在对方设备浏览器打开应用显示的完整地址（包含访问口令），即可执行以下读写操作：
+“文件快传”会在手机**保持应用前台**时开启一个临时局域网地址。服务会显式绑定当前 Wi-Fi 的 IPv4 地址，并在显示地址前完成本机 HTTP 连通性检查。将手机与电脑或另一台手机连接到同一 Wi-Fi 后，在对方设备浏览器打开应用显示的完整地址（包含访问口令），即可执行以下读写操作：
 
 | 操作 | 说明 |
 | --- | --- |
@@ -78,7 +78,7 @@ pnpm test
 
 需要在 Windows 本地生成 APK、绕过 EAS 云端构建配额时，请阅读 [`docs/windows-local-apk-build.md`](docs/windows-local-apk-build.md)。
 
-项目基于 Expo SDK 54、React Native、Expo Router、`expo-audio`、`react-native-audio-api`、`expo-http-server` 与 AsyncStorage 构建。WAV 录音和局域网文件快传均依赖 Android 原生模块：修改后必须重新构建并安装 APK，不能在网页预览或 Expo Go 中完整验证。
+项目基于 Expo SDK 54、React Native、Expo Router、`expo-audio`、`react-native-audio-api`、`react-native-tcp-socket` 与 AsyncStorage 构建。WAV 录音和局域网文件快传均依赖 Android 原生模块：修改后必须重新构建并安装 APK，不能在网页预览或 Expo Go 中完整验证。
 
 ## 隐私说明
 

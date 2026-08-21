@@ -81,6 +81,12 @@ export default function RecordingScreen() {
       catch { /* stopping an unprepared recorder is safe to ignore during cancellation */ }
     });
   };
+  const stopPlayback = () => {
+    try {
+      player.pause();
+      void player.seekTo(0);
+    } catch { /* the player may not be initialized while changing recording state */ }
+  };
 
   useEffect(() => { setCurrentIndex(Math.min(Math.max(0, Number(sentenceParam) || 0), Math.max(0, total - 1))); }, [sentenceParam, total]);
   useEffect(() => { setReadingFontSize(settings.readingFontSize); }, [settings.readingFontSize]);
@@ -117,13 +123,14 @@ export default function RecordingScreen() {
     closingRef.current = true;
     setIsClosing(true);
     cancelPendingOperation();
-    try { await stopRecorderSafely(); player.pause(); }
+    try { await stopRecorderSafely(); stopPlayback(); }
     catch { /* navigation should remain available even when a native audio resource is unavailable */ }
     if (router.canGoBack()) router.back(); else router.replace(`/project/${project.id}` as never);
   };
   const start = async () => {
     const token = ++lifecycleTokenRef.current;
     try {
+      stopPlayback();
       setLiveWaveform([]); setRecordingDurationMs(0); notify(Haptics.ImpactFeedbackStyle.Light); setPhase("leading");
       if (!await waitForSilence(settings.leadingSilenceMs, token)) { if (!closingRef.current) setPhase("idle"); return; }
       await runRecorderOperation(async () => {
@@ -148,8 +155,8 @@ export default function RecordingScreen() {
     if (playerStatus.playing) { player.pause(); return; }
     player.replace({ uri: sentence.recordingUri }); await player.seekTo(0); player.play();
   };
-  const jumpToSentence = (target: number) => { setCurrentIndex(target); setShowSentencePicker(false); };
-  const finishTask = () => { try { player.pause(); } catch { /* player is optional */ } router.replace(`/project/${project.id}` as never); };
+  const jumpToSentence = (target: number) => { stopPlayback(); setCurrentIndex(target); setShowSentencePicker(false); };
+  const finishTask = () => { stopPlayback(); router.replace(`/project/${project.id}` as never); };
   const statusCopy = phase === "leading" ? t("leadingSilence") : phase === "recording" ? t("recording") : phase === "trailing" ? t("trailingSilence") : phase === "saving" ? t("saving") : sentence.recordingUri ? t("recorded") : t("ready");
   const waveform = phase === "recording" ? liveWaveform : sentence.waveform ?? [];
   const promptRippleStyle = {
@@ -184,7 +191,7 @@ export default function RecordingScreen() {
         <View style={styles.waveformBlock}><View style={styles.waveformHeader}><Text style={styles.waveformTitle}>{phase === "recording" ? t("recording") : sentence.recordingUri ? t("play") : t("ready")}</Text>{sentence.recordingUri && phase !== "recording" ? <Text style={styles.waveformTime}>{formatSeconds(playerStatus.currentTime)} / {formatSeconds(playerStatus.duration)}</Text> : phase === "recording" ? <Text style={styles.waveformTime}>{formatSeconds(recordingDurationMs / 1000)}</Text> : null}</View><AudioWaveform samples={waveform} recording={phase === "recording"} progress={sentence.recordingUri && phase !== "recording" ? playbackProgress : 0} /></View>
         <Text style={[styles.statusText, phase === "recording" && styles.statusRecording]}>{statusCopy}</Text>
         <View style={styles.bottomActionArea}>
-          <View style={styles.bottomTools}><TouchableOpacity style={[styles.tool, !sentence.recordingUri && styles.toolDisabled]} onPress={togglePlay} disabled={!sentence.recordingUri || isBusy}><MaterialIcons color={sentence.recordingUri ? "#2F4DA0" : "#B9C2D5"} name={playerStatus.playing ? "pause" : "play-arrow"} size={23} /><Text style={[styles.toolText, !sentence.recordingUri && styles.toolTextDisabled]}>{playerStatus.playing ? t("pause") : t("play")}</Text></TouchableOpacity><TouchableOpacity style={styles.tool} onPress={() => setCurrentIndex((value) => Math.max(0, value - 1))} disabled={isBusy || currentIndex === 0}><MaterialIcons color={currentIndex ? "#2F4DA0" : "#B9C2D5"} name="skip-previous" size={23} /><Text style={[styles.toolText, currentIndex === 0 && styles.toolTextDisabled]}>{t("previous")}</Text></TouchableOpacity><TouchableOpacity style={styles.tool} onPress={() => setCurrentIndex((value) => Math.min(total - 1, value + 1))} disabled={isBusy || currentIndex === total - 1}><MaterialIcons color={currentIndex < total - 1 ? "#2F4DA0" : "#B9C2D5"} name="skip-next" size={23} /><Text style={[styles.toolText, currentIndex === total - 1 && styles.toolTextDisabled]}>{t("next")}</Text></TouchableOpacity></View>
+          <View style={styles.bottomTools}><TouchableOpacity style={[styles.tool, !sentence.recordingUri && styles.toolDisabled]} onPress={togglePlay} disabled={!sentence.recordingUri || isBusy}><MaterialIcons color={sentence.recordingUri ? "#2F4DA0" : "#B9C2D5"} name={playerStatus.playing ? "pause" : "play-arrow"} size={23} /><Text style={[styles.toolText, !sentence.recordingUri && styles.toolTextDisabled]}>{playerStatus.playing ? t("pause") : t("play")}</Text></TouchableOpacity><TouchableOpacity style={styles.tool} onPress={() => { stopPlayback(); setCurrentIndex((value) => Math.max(0, value - 1)); }} disabled={isBusy || currentIndex === 0}><MaterialIcons color={currentIndex ? "#2F4DA0" : "#B9C2D5"} name="skip-previous" size={23} /><Text style={[styles.toolText, currentIndex === 0 && styles.toolTextDisabled]}>{t("previous")}</Text></TouchableOpacity><TouchableOpacity style={styles.tool} onPress={() => { stopPlayback(); setCurrentIndex((value) => Math.min(total - 1, value + 1)); }} disabled={isBusy || currentIndex === total - 1}><MaterialIcons color={currentIndex < total - 1 ? "#2F4DA0" : "#B9C2D5"} name="skip-next" size={23} /><Text style={[styles.toolText, currentIndex === total - 1 && styles.toolTextDisabled]}>{t("next")}</Text></TouchableOpacity></View>
           <TouchableOpacity accessibilityLabel={t("sentenceNumber")} accessibilityRole="button" disabled={isBusy} onPress={() => setShowSentencePicker(true)} style={[styles.sentencePickerButton, isBusy && styles.sentencePickerDisabled]}><View style={styles.sentencePickerIcon}><MaterialIcons color="#2F4DA0" name="format-list-numbered" size={20} /></View><View style={styles.sentencePickerCopy}><Text style={styles.sentencePickerLabel}>{t("sentenceNumber")}</Text><Text style={styles.sentencePickerValue}>#{String(currentIndex + 1).padStart(3, "0")} / {total}</Text></View><MaterialIcons color="#2F4DA0" name="expand-more" size={24} /></TouchableOpacity>
           {phase === "idle" ? <View style={styles.idleActionRow}><TouchableOpacity style={[styles.recordButton, styles.inlineAction, sentence.recordingUri && styles.rerecordButton]} onPress={start}><MaterialIcons color="#FFFFFF" name="mic" size={23} /><Text style={styles.recordText}>{sentence.recordingUri ? t("replaySentence") : t("startRecording")}</Text></TouchableOpacity>{projectComplete ? <TouchableOpacity style={[styles.completeButton, styles.inlineAction]} onPress={finishTask}><MaterialIcons color="#FFFFFF" name="check-circle" size={22} /><Text style={styles.recordText}>{t("completeTask")}</Text></TouchableOpacity> : null}</View> : phase === "leading" ? <TouchableOpacity style={styles.cancelButton} onPress={() => { cancelPendingOperation(); setPhase("idle"); }}><Text style={styles.cancelText}>{t("cancelPreparation")}</Text></TouchableOpacity> : phase === "recording" ? <TouchableOpacity style={styles.stopButton} onPress={finish}><View style={styles.stopSquare} /><Text style={styles.recordText}>{t("stopRecording")}</Text></TouchableOpacity> : <View style={styles.workingButton}><ActivityIndicator color="#FFFFFF" /><Text style={styles.recordText}>{phase === "trailing" ? t("trailingSilence") : t("saving")}</Text></View>}
         </View>
