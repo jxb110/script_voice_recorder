@@ -35,3 +35,9 @@
 - [x] 将脚本选择限制为 TXT，并移除 CSV、TSV 与独立 JSON 文件导入
 - [x] 将 TXT 每行解析为 JSON 字元数组，映射 char、pinyin 与 Mark
 - [x] 更新导入提示并验证多行 TXT JSON 脚本
+- [x] 排查 Android Gradle 发布构建失败的原生配置与依赖风险
+- [x] 修复可确定的 Android 构建配置问题并验证 Expo 配置
+- [x] 提供 Run gradlew 阶段日志的精确采集与提交指引
+- [x] 对齐 Expo SDK 54 所需的 document-picker、file-system、sharing 与 asset 原生依赖版本
+- [x] 消除 expo-file-system 重复原生模块并重新运行 Expo 依赖诊断
+- [x] 完成 expo-asset 安装并复核 Expo SDK 54 原生依赖锁定结果
