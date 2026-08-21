@@ -1,8 +1,8 @@
 import { strToU8, zipSync } from "fflate";
 import * as FileSystem from "expo-file-system/legacy";
-import * as MediaLibrary from "expo-media-library";
 import { Platform } from "react-native";
 
+import { copyPrivateFileToSharedStorage, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess } from "@/lib/external-storage";
 import type { ScriptProject, ScriptSentence, ScriptToken, Speaker } from "@/shared/recorder-types";
 
 const ROOT_DIRECTORY = FileSystem.documentDirectory ?? "";
@@ -96,28 +96,10 @@ export async function persistRecording(sourceUri: string, project: ScriptProject
 
 export async function exportRecordingToPublicWaveDirectory(privateUri: string, project: ScriptProject, speaker: Speaker) {
   if (Platform.OS !== "android") return undefined;
-  let permission = await MediaLibrary.getPermissionsAsync(true, ["audio"]);
-  if (!permission.granted) permission = await MediaLibrary.requestPermissionsAsync(true, ["audio"]);
-  if (!permission.granted) throw new Error("未获得保存音频到手机公共目录的权限。录音已保留在应用内部目录。");
-
-  await ensureDirectory(EXPORT_STAGING_DIRECTORY);
+  await requestAllFilesAccess();
   const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${Date.now()}.wav`;
-  const stagingUri = `${EXPORT_STAGING_DIRECTORY}${exportName}`;
-  const existing = await FileSystem.getInfoAsync(stagingUri);
-  if (existing.exists) await FileSystem.deleteAsync(stagingUri, { idempotent: true });
-  await FileSystem.copyAsync({ from: privateUri, to: stagingUri });
-  const stagedFile = await FileSystem.getInfoAsync(stagingUri);
-  if (!stagedFile.exists) throw new Error("无法创建导出音频副本。录音已保留在应用内部目录。");
-
-  const albumName = getPublicAudioAlbumName(project, speaker);
-  const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
-  if (existingAlbum) {
-    const asset = await MediaLibrary.createAssetAsync(stagingUri, existingAlbum);
-    return asset.uri;
-  }
-  const firstAsset = await MediaLibrary.createAssetAsync(stagingUri);
-  const album = await MediaLibrary.createAlbumAsync(albumName, firstAsset, false);
-  return album ? firstAsset.uri : undefined;
+  const relativePath = `${RECORDINGS_RELATIVE_DIR}/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}/${exportName}`;
+  return copyPrivateFileToSharedStorage(privateUri, relativePath);
 }
 
 function base64ToBytes(value: string) {
