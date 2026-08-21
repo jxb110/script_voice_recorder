@@ -32,3 +32,6 @@
 - [x] 为波形数据转换补充回归验证
 - [x] 排查 Honor 9X Pro（HarmonyOS 3.0）APK 启动闪退与原生配置兼容性
 - [x] 修复高风险启动配置并提供设备端崩溃日志采集指引
+- [x] 将脚本选择限制为 TXT，并移除 CSV、TSV 与独立 JSON 文件导入
+- [x] 将 TXT 每行解析为 JSON 字元数组，映射 char、pinyin 与 Mark
+- [x] 更新导入提示并验证多行 TXT JSON 脚本

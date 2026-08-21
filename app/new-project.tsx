@@ -11,7 +11,7 @@ import { useRecorder } from "@/lib/recorder-context";
 import type { ScriptSentence } from "@/shared/recorder-types";
 
 type ScriptAsset = { uri: string; name: string; content?: string };
-const SCRIPT_NAME_PATTERN = /\.(txt|csv|tsv|json)$/i;
+const SCRIPT_NAME_PATTERN = /\.txt$/i;
 
 export default function NewProjectScreen() {
   const router = useRouter();
@@ -43,7 +43,7 @@ export default function NewProjectScreen() {
   };
 
   const pickFiles = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: ["text/plain", "text/csv", "application/json", "*/*"], copyToCacheDirectory: true, multiple: true });
+    const result = await DocumentPicker.getDocumentAsync({ type: "text/plain", copyToCacheDirectory: true, multiple: true });
     if (!result.canceled) await importAssets(result.assets.map((asset) => ({ uri: asset.uri, name: asset.name })));
   };
 
@@ -52,7 +52,7 @@ export default function NewProjectScreen() {
     try {
       const directory = await Directory.pickDirectoryAsync();
       const files = directory.list().filter((item): item is File => item instanceof File && SCRIPT_NAME_PATTERN.test(item.name));
-      if (!files.length) { Alert.alert("目录中没有可导入脚本", "请选择包含 TXT、CSV、TSV 或 JSON 文件的目录。 "); return; }
+      if (!files.length) { Alert.alert("目录中没有可导入脚本", "请选择包含 TXT 脚本文件的目录。 "); return; }
       await importAssets(files.map((file) => ({ uri: file.uri, name: file.name, content: file.textSync() })));
     } catch (error) {
       Alert.alert("读取目录失败", error instanceof Error ? error.message : "无法读取该目录，请重新选择。 ");
@@ -61,7 +61,7 @@ export default function NewProjectScreen() {
 
   const create = () => {
     if (!speakerId) { Alert.alert("请选择发音人", "录音文件需要使用发音人信息建立目录。"); return; }
-    if (!sentences.length) { Alert.alert("请先导入文本", "支持 TXT、CSV、TSV、拼音 JSON 以及 Android 目录批量读取。 "); return; }
+    if (!sentences.length) { Alert.alert("请先导入文本", "仅支持每行一个 JSON 字元数组的 TXT 文件。 "); return; }
     const project = createProject({ name: projectName.trim() || "未命名任务", speakerId, sourceFileName, sourceFileUri, sentences });
     router.replace(`/project/${project.id}` as never);
   };
@@ -74,10 +74,10 @@ export default function NewProjectScreen() {
         <Text style={styles.label}>发音人</Text>
         <View style={styles.speakerGroup}>{speakers.length ? speakers.map((speaker) => <TouchableOpacity key={speaker.id} style={[styles.speaker, speakerId === speaker.id && styles.speakerSelected]} onPress={() => setSpeakerId(speaker.id)}><View style={styles.speakerAvatar}><Text style={styles.speakerAvatarText}>{speaker.name.slice(0, 1)}</Text></View><View style={styles.speakerInfo}><Text style={styles.speakerName}>{speaker.name}</Text><Text style={styles.speakerMeta}>{speaker.gender} · {speaker.age} 岁</Text></View>{speakerId === speaker.id && <MaterialIcons color="#2F855A" name="check-circle" size={21} />}</TouchableOpacity>) : <TouchableOpacity style={styles.noSpeaker} onPress={() => router.push("/speakers" as never)}><MaterialIcons color="#2F4DA0" name="person-add" size={21} /><Text style={styles.noSpeakerText}>尚无发音人，先填写信息</Text></TouchableOpacity>}</View>
         <Text style={styles.label}>录音文本</Text>
-        <TouchableOpacity style={styles.importBox} onPress={pickFiles} disabled={importing}>{importing ? <ActivityIndicator color="#2F4DA0" /> : <><View style={styles.fileIcon}><MaterialIcons color="#2F4DA0" name="upload-file" size={27} /></View><View style={styles.importCopy}><Text style={styles.importTitle}>{sourceFileName || "选择一个或多个文本文件"}</Text><Text style={styles.importHint}>{sentences.length ? `已解析 ${sentences.length} 句，点击可重新选择` : "支持 TXT、CSV、TSV、拼音 JSON"}</Text></View><MaterialIcons color="#9AA5BC" name="chevron-right" size={24} /></>}</TouchableOpacity>
+        <TouchableOpacity style={styles.importBox} onPress={pickFiles} disabled={importing}>{importing ? <ActivityIndicator color="#2F4DA0" /> : <><View style={styles.fileIcon}><MaterialIcons color="#2F4DA0" name="upload-file" size={27} /></View><View style={styles.importCopy}><Text style={styles.importTitle}>{sourceFileName || "选择一个或多个 TXT 脚本"}</Text><Text style={styles.importHint}>{sentences.length ? `已解析 ${sentences.length} 句，点击可重新选择` : "每行一个 JSON 字元数组"}</Text></View><MaterialIcons color="#9AA5BC" name="chevron-right" size={24} /></>}</TouchableOpacity>
         <TouchableOpacity style={styles.directoryButton} onPress={pickDirectory} disabled={importing}><MaterialIcons color="#2F4DA0" name="folder-open" size={20} /><Text style={styles.directoryText}>从目录批量读取脚本（Android）</Text></TouchableOpacity>
         {sentences.length > 0 && <View style={styles.preview}><Text style={styles.previewTitle}>导入预览</Text><Text style={styles.previewText} numberOfLines={3}>{sentences.slice(0, 3).map((sentence) => `${sentence.index}. ${sentence.rawText}${sentence.prompt ? `（${sentence.prompt}）` : ""}`).join("\n")}</Text></View>}
-        <View style={styles.formatNote}><MaterialIcons color="#65708A" name="lightbulb-outline" size={19} /><Text style={styles.formatText}>两列表格中第一列为朗读文本、第二列为提示词。JSON 可以为每个汉字填写拼音，目录读取会合并目录内全部支持格式的文件。</Text></View>
+        <View style={styles.formatNote}><MaterialIcons color="#65708A" name="lightbulb-outline" size={19} /><Text style={styles.formatText}>TXT 每一行都是一条 JSON 字元数组：`char` 为朗读文字，`pinyin` 显示在字上方，行末 `Mark` 为提示词。</Text></View>
         <TouchableOpacity style={[styles.create, (!speakerId || !sentences.length) && styles.createDisabled]} onPress={create} disabled={!speakerId || !sentences.length}><Text style={styles.createText}>创建并开始录制</Text></TouchableOpacity>
       </ScrollView>
     </ScreenContainer>

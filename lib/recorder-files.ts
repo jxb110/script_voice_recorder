@@ -22,73 +22,34 @@ function makeSentence(index: number, rawText: string, prompt = "", tokens?: Scri
   return { id: createId("sentence"), index, prompt: prompt.trim(), rawText: rawText.trim() || tokenText(cleanTokens), tokens: cleanTokens };
 }
 
-function splitDelimitedLine(line: string, delimiter: string) {
-  const values: string[] = [];
-  let buffer = "";
-  let inQuote = false;
-  for (let position = 0; position < line.length; position += 1) {
-    const character = line[position];
-    if (character === '"') {
-      if (inQuote && line[position + 1] === '"') { buffer += '"'; position += 1; }
-      else inQuote = !inQuote;
-    } else if (character === delimiter && !inQuote) {
-      values.push(buffer.trim());
-      buffer = "";
-    } else buffer += character;
-  }
-  values.push(buffer.trim());
-  return values;
-}
-
 function readMarker(value: unknown) {
   if (!value || typeof value !== "object" || !("Mark" in value)) return "";
   const marker = (value as { Mark?: unknown }).Mark;
   return typeof marker === "string" ? marker.trim() : "";
 }
 
-function parseTokenSentence(value: unknown, index: number, inheritedPrompt = ""): ScriptSentence | null {
-  if (Array.isArray(value)) {
-    const marker = value.map(readMarker).find(Boolean) ?? "";
-    const tokens = value
-      .filter((entry): entry is { char: string; pinyin?: string } => Boolean(entry) && typeof entry === "object" && "char" in entry)
-      .map((entry) => ({ char: String(entry.char), pinyin: entry.pinyin ? String(entry.pinyin) : undefined }));
-    return tokens.length ? makeSentence(index, tokenText(tokens), marker || inheritedPrompt, tokens) : null;
+function parseTxtJsonLine(line: string, lineNumber: number) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    throw new Error(`第 ${lineNumber} 行不是合法 JSON。每一行必须是以 [ 开始、以 ] 结束的字元数组。`);
   }
-  if (value && typeof value === "object") {
-    const source = value as Record<string, unknown>;
-    const prompt = String(source.prompt ?? source.Mark ?? source.hint ?? inheritedPrompt ?? "").trim();
-    const tokenEntries = [source.tokens, source.chars, source.text, source.content].find((candidate) => Array.isArray(candidate));
-    if (Array.isArray(tokenEntries)) return parseTokenSentence(tokenEntries, index, prompt);
-    const rawText = [source.text, source.rawText, source.script, source.reading, source.content].find((candidate): candidate is string => typeof candidate === "string") ?? "";
-    return rawText.trim() ? makeSentence(index, rawText, prompt) : null;
-  }
-  return typeof value === "string" && value.trim() ? makeSentence(index, value, inheritedPrompt) : null;
+  if (!Array.isArray(parsed)) throw new Error(`第 ${lineNumber} 行必须是 JSON 数组。`);
+  const tokens = parsed
+    .filter((entry): entry is { char: string; pinyin?: string } => Boolean(entry) && typeof entry === "object" && "char" in entry)
+    .map((entry) => ({ char: String(entry.char), pinyin: entry.pinyin ? String(entry.pinyin) : undefined }));
+  if (!tokens.length) throw new Error(`第 ${lineNumber} 行缺少 char 字段，无法生成朗读文本。`);
+  const prompt = parsed.map(readMarker).find(Boolean) ?? "";
+  return makeSentence(lineNumber, tokenText(tokens), prompt, tokens);
 }
 
 export function parseScriptContent(content: string, fileName: string): ScriptSentence[] {
+  if (!fileName.toLowerCase().endsWith(".txt")) throw new Error("仅支持 TXT 脚本文件。每一行应为一个 JSON 字元数组。");
   const normalized = content.replace(/^\uFEFF/, "").trim();
-  if (!normalized) throw new Error("脚本文件为空，请至少保留一行朗读文本。");
-  if (fileName.toLowerCase().endsWith(".json") || normalized.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(normalized) as unknown;
-      const rootSentences = parsed && typeof parsed === "object" && !Array.isArray(parsed) && Array.isArray((parsed as { sentences?: unknown }).sentences) ? (parsed as { sentences: unknown[] }).sentences : undefined;
-      const values = Array.isArray(parsed) ? parsed : rootSentences ?? [parsed];
-      const isSingleTokenSequence = values.length > 0 && values.some((entry) => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) && "char" in entry) && values.every((entry) => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) && !("tokens" in entry) && ("char" in entry || "Mark" in entry));
-      const sentences = (isSingleTokenSequence ? [values] : values)
-        .map((value, index) => parseTokenSentence(value, index + 1))
-        .filter((value): value is ScriptSentence => value !== null);
-      if (sentences.length) return sentences;
-    } catch {
-      if (fileName.toLowerCase().endsWith(".json")) throw new Error("JSON 脚本格式无法解析。请检查逗号、括号以及 char、pinyin、Mark 字段。");
-    }
-  }
+  if (!normalized) throw new Error("脚本文件为空，请至少保留一行 JSON 字元数组。");
   const rows = normalized.split(/\r?\n/).filter((line) => line.trim());
-  const extension = fileName.split(".").pop()?.toLowerCase();
-  const delimiter = extension === "tsv" || (extension === "txt" && rows.some((line) => line.includes("\t"))) ? "\t" : extension === "csv" ? "," : "";
-  return rows.map((line, index) => {
-    const [reading = "", prompt = ""] = delimiter ? splitDelimitedLine(line, delimiter) : [line, ""];
-    return makeSentence(index + 1, reading, prompt);
-  });
+  return rows.map((line, index) => parseTxtJsonLine(line, index + 1));
 }
 
 export async function persistImportedScript(sourceUri: string, originalName: string) {
