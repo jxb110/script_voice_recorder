@@ -1,16 +1,29 @@
 import { Platform } from "react-native";
-import { AudioManager, AudioRecorder, BitDepth, FileDirectory, FileFormat, FlacCompressionLevel, IOSAudioQuality } from "react-native-audio-api";
 
 import type { RecorderSettings } from "@/shared/recorder-types";
 
-let recorder: AudioRecorder | null = null;
+type AudioApiModule = typeof import("react-native-audio-api");
+type AudioRecorderInstance = InstanceType<AudioApiModule["AudioRecorder"]>;
+
+let audioApi: AudioApiModule | null = null;
+let recorder: AudioRecorderInstance | null = null;
+
+function getAudioApi() {
+  if (Platform.OS === "web") throw new Error("WAV 录音需要使用重新构建后的 Android 应用。网页预览不支持原生 WAV 录音。");
+  if (!audioApi) audioApi = require("react-native-audio-api") as AudioApiModule;
+  return audioApi;
+}
 
 function getRecorder() {
-  if (!recorder) recorder = new AudioRecorder();
+  if (!recorder) {
+    const { AudioRecorder } = getAudioApi();
+    recorder = new AudioRecorder();
+  }
   return recorder;
 }
 
 function getBitDepth(bitDepth: RecorderSettings["bitDepth"]) {
+  const { BitDepth } = getAudioApi();
   return bitDepth === 32 ? BitDepth.Bit32 : BitDepth.Bit16;
 }
 
@@ -26,7 +39,7 @@ function dbFromBuffer(samples: Float32Array) {
 }
 
 export async function startWavRecording(settings: RecorderSettings, onMetering: (db: number) => void) {
-  if (Platform.OS === "web") throw new Error("WAV 录音需要使用重新构建后的 Android 应用。网页预览不支持原生 WAV 录音。");
+  const { AudioManager, FileDirectory, FileFormat, FlacCompressionLevel, IOSAudioQuality } = getAudioApi();
   const permission = await AudioManager.requestRecordingPermissions();
   if (permission !== "Granted") throw new Error("请在系统设置中允许麦克风权限后再录制。");
   AudioManager.setAudioSessionOptions({ iosCategory: "record", iosMode: "measurement" });
@@ -58,6 +71,7 @@ export async function startWavRecording(settings: RecorderSettings, onMetering: 
 
 export async function stopWavRecording() {
   if (!recorder || !recorder.isRecording()) return undefined;
+  const { AudioManager } = getAudioApi();
   const result = recorder.stop();
   recorder.clearOnAudioReady();
   await AudioManager.setAudioSessionActivity(false);

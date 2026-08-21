@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as Network from "expo-network";
-import * as HttpServer from "expo-http-server";
+import type { RequestEvent, Response } from "expo-http-server";
 import { Platform } from "react-native";
 
 import { persistTransferredScript } from "@/lib/recorder-files";
@@ -8,6 +8,7 @@ import type { ScriptProject, Speaker } from "@/shared/recorder-types";
 
 const PORT = 35678;
 const MAX_SCRIPT_SIZE = 3 * 1024 * 1024;
+type HttpServerModule = typeof import("expo-http-server");
 
 export type TransferredScript = { id: string; name: string; uri: string; receivedAt: string };
 export type LanTransferStatus = { running: boolean; address?: string; token?: string; error?: string; scripts: TransferredScript[] };
@@ -18,22 +19,29 @@ type ActiveSession = { address: string; token: string; scripts: TransferredScrip
 let activeSession: ActiveSession | null = null;
 let routesRegistered = false;
 let statusListener: (() => void) | undefined;
+let nativeHttpServer: HttpServerModule | null = null;
+
+function getHttpServer() {
+  if (Platform.OS === "web") throw new Error("文件快传需要使用重新构建后的 Android 应用。");
+  if (!nativeHttpServer) nativeHttpServer = require("expo-http-server") as HttpServerModule;
+  return nativeHttpServer;
+}
 
 function makeToken() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function readParams(request: HttpServer.RequestEvent) {
+function readParams(request: RequestEvent) {
   try { return JSON.parse(request.paramsJson || "{}") as Record<string, string>; }
   catch { return {}; }
 }
 
-function isAuthorized(request: HttpServer.RequestEvent) {
+function isAuthorized(request: RequestEvent) {
   const token = readParams(request).token;
   return Boolean(activeSession && token && token === activeSession.token);
 }
 
-function json(body: unknown, statusCode = 200): HttpServer.Response {
+function json(body: unknown, statusCode = 200): Response {
   return { statusCode, contentType: "application/json; charset=utf-8", headers: { "Cache-Control": "no-store" }, body: JSON.stringify(body) };
 }
 
@@ -65,13 +73,14 @@ function htmlPage() {
 function registerRoutes() {
   if (routesRegistered) return;
   routesRegistered = true;
-  HttpServer.route("/", "GET", async (request) => isAuthorized(request) ? { statusCode: 200, contentType: "text/html; charset=utf-8", body: htmlPage() } : { statusCode: 401, contentType: "text/plain; charset=utf-8", body: "请输入手机显示的文件快传地址和访问口令。" });
-  HttpServer.route("/api/status", "GET", async (request) => {
+  const server = getHttpServer();
+  server.route("/", "GET", async (request) => isAuthorized(request) ? { statusCode: 200, contentType: "text/html; charset=utf-8", body: htmlPage() } : { statusCode: 401, contentType: "text/plain; charset=utf-8", body: "请输入手机显示的文件快传地址和访问口令。" });
+  server.route("/api/status", "GET", async (request) => {
     if (!isAuthorized(request)) return json({ error: "访问口令无效。" }, 401);
     const recordings = await recordingDownloads();
     return json({ scripts: activeSession?.scripts ?? [], recordings: recordings.map(({ id, name, size }) => ({ id, name, size })) });
   });
-  HttpServer.route("/api/upload", "POST", async (request) => {
+  server.route("/api/upload", "POST", async (request) => {
     if (!isAuthorized(request)) return json({ error: "访问口令无效。" }, 401);
     try {
       const payload = JSON.parse(request.body || "{}") as { name?: string; content?: string };
@@ -85,7 +94,7 @@ function registerRoutes() {
       return json({ script });
     } catch (error) { return json({ error: error instanceof Error ? error.message : "无法接收脚本。" }, 400); }
   });
-  HttpServer.route("/api/download", "GET", async (request) => {
+  server.route("/api/download", "GET", async (request) => {
     if (!isAuthorized(request)) return json({ error: "访问口令无效。" }, 401);
     try {
       const id = readParams(request).id;
@@ -110,8 +119,9 @@ export async function startLanFileTransfer(projects: ScriptProject[], speakers: 
   activeSession = { address: `http://${ip}:${PORT}`, token: makeToken(), scripts: [], projects, speakers };
   registerRoutes();
   statusListener = undefined;
-  HttpServer.setup(PORT, (event) => { if (event.status === "ERROR") statusListener?.(); });
-  HttpServer.start();
+  const server = getHttpServer();
+  server.setup(PORT, (event) => { if (event.status === "ERROR") statusListener?.(); });
+  server.start();
   return getLanFileTransferStatus();
 }
 
@@ -125,5 +135,5 @@ export function getLanFileTransferStatus(): LanTransferStatus {
 
 export function stopLanFileTransfer() {
   activeSession = null;
-  HttpServer.stop();
+  if (Platform.OS !== "web") getHttpServer().stop();
 }
