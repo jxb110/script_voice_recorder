@@ -1,7 +1,8 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import Constants from "expo-constants";
-import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useNavigation } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { SettingsFooter } from "@/components/settings-footer";
@@ -12,61 +13,101 @@ import type { RecorderSettings } from "@/shared/recorder-types";
 const sampleRates = [16000, 22050, 44100, 48000];
 const bitDepths = [16, 32] as const;
 
+function isSameSettings(left: RecorderSettings, right: RecorderSettings) {
+  return left.sampleRate === right.sampleRate && left.bitDepth === right.bitDepth && left.channels === right.channels && left.leadingSilenceMs === right.leadingSilenceMs && left.trailingSilenceMs === right.trailingSilenceMs && left.readingFontSize === right.readingFontSize;
+}
+
 export default function SettingsScreen() {
   const { settings, updateSettings } = useRecorder();
   const { language } = useAppLanguage();
+  const navigation = useNavigation();
+  const parentNavigation = navigation.getParent();
+  const tabNavigation = parentNavigation as unknown as {
+    getState: () => ReturnType<NonNullable<typeof parentNavigation>["getState"]>;
+    navigate: (name: string) => void;
+    addListener: (event: "tabPress", listener: (event: { target?: string; preventDefault: () => void }) => void) => () => void;
+  } | undefined;
+  const bypassGuardRef = useRef(false);
   const [draft, setDraft] = useState<RecorderSettings>(settings);
   const zh = language === "zh";
-  const appVersion = Constants.expoConfig?.version ?? "1.0.0";
+  const appVersion = Constants.expoConfig?.version ?? "2.0.0";
   const copy = zh ? {
-    title: "录音设置", subtitle: "WAV 无损录音与静音控制", save: "保存", saved: "设置已保存", savedHint: "新参数会在下一句开始录制时生效。", format: "输出格式", formatHint: "所有新录音都保存为无压缩 WAV 文件", wav: "WAV", depth: "位深", depthHint: "仅保留录音所需的 16-bit 与 32-bit", sample: "采样率", sampleHint: "影响音频细节与文件体积", channels: "声道", channelsHint: "单人采音通常选择单声道", mono: "单声道", stereo: "立体声", silence: "静音控制", leading: "首端静音", leadingHint: "点击开始后，正式录制前预留的安静时长", trailing: "尾端静音", trailingHint: "点击停止后，保存文件前保留的安静时长", milliseconds: "毫秒", note: "WAV 为无压缩 PCM 格式。选择 32-bit 会显著增大文件体积；推荐语音录制使用 16-bit。",
+    title: "录音设置", subtitle: "WAV 无损录音", save: "保存", saved: "设置已保存", savedHint: "新参数会在下一句开始录制时生效。", format: "WAV", depth: "位深", sample: "采样率", channels: "声道", mono: "单声道", stereo: "立体声", silence: "首尾静音", leading: "首端", trailing: "尾端", milliseconds: "毫秒", note: "32-bit 文件更大；语音通常推荐 16-bit。", unsavedTitle: "有未保存的设置", unsavedHint: "是否保存当前更改后再离开？", keep: "继续编辑", discard: "放弃更改", saveLeave: "保存并离开",
   } : {
-    title: "Recording settings", subtitle: "WAV lossless recording and silence control", save: "Save", saved: "Settings saved", savedHint: "New parameters apply when the next sentence starts recording.", format: "Output format", formatHint: "All new recordings are saved as uncompressed WAV files", wav: "WAV", depth: "Bit depth", depthHint: "Only the required 16-bit and 32-bit choices are available", sample: "Sample rate", sampleHint: "Controls audio detail and file size", channels: "Channels", channelsHint: "Mono is usually best for a single speaker", mono: "Mono", stereo: "Stereo", silence: "Silence controls", leading: "Leading silence", leadingHint: "Quiet time before the recording starts", trailing: "Trailing silence", trailingHint: "Quiet time retained before the file is saved", milliseconds: "ms", note: "WAV uses uncompressed PCM. 32-bit substantially increases file size; 16-bit is recommended for voice recording.",
+    title: "Recording settings", subtitle: "Lossless WAV capture", save: "Save", saved: "Settings saved", savedHint: "New parameters apply when the next sentence starts recording.", format: "WAV", depth: "Bit depth", sample: "Sample rate", channels: "Channels", mono: "Mono", stereo: "Stereo", silence: "Silence", leading: "Leading", trailing: "Trailing", milliseconds: "ms", note: "32-bit files are larger; 16-bit is recommended for voice.", unsavedTitle: "Unsaved settings", unsavedHint: "Save your changes before leaving?", keep: "Keep editing", discard: "Discard", saveLeave: "Save and leave",
   };
+  const hasUnsavedChanges = useMemo(() => !isSameSettings(draft, settings), [draft, settings]);
 
   useEffect(() => setDraft(settings), [settings]);
 
-  const save = () => {
-    const leadingSilenceMs = Math.max(0, Math.min(10000, Number(draft.leadingSilenceMs) || 0));
-    const trailingSilenceMs = Math.max(0, Math.min(10000, Number(draft.trailingSilenceMs) || 0));
-    const next = { ...draft, leadingSilenceMs, trailingSilenceMs };
+  const saveDraft = useCallback((showFeedback: boolean) => {
+    const next = { ...draft, leadingSilenceMs: Math.max(0, Math.min(10000, Number(draft.leadingSilenceMs) || 0)), trailingSilenceMs: Math.max(0, Math.min(10000, Number(draft.trailingSilenceMs) || 0)) };
     updateSettings(next);
     setDraft(next);
-    Alert.alert(copy.saved, copy.savedHint);
-  };
+    if (showFeedback) Alert.alert(copy.saved, copy.savedHint);
+  }, [copy.saved, copy.savedHint, draft, updateSettings]);
+
+  const continueNavigation = useCallback((action: () => void) => {
+    bypassGuardRef.current = true;
+    action();
+    setTimeout(() => { bypassGuardRef.current = false; }, 0);
+  }, []);
+
+  const confirmLeave = useCallback((action: () => void) => {
+    if (!hasUnsavedChanges) { action(); return; }
+    Alert.alert(copy.unsavedTitle, copy.unsavedHint, [
+      { text: copy.keep, style: "cancel" },
+      { text: copy.discard, style: "destructive", onPress: () => { setDraft(settings); continueNavigation(action); } },
+      { text: copy.saveLeave, onPress: () => { saveDraft(false); continueNavigation(action); } },
+    ]);
+  }, [continueNavigation, copy.discard, copy.keep, copy.saveLeave, copy.unsavedHint, copy.unsavedTitle, hasUnsavedChanges, saveDraft, settings]);
+
+  useEffect(() => navigation.addListener("beforeRemove", (event) => {
+    if (!hasUnsavedChanges || bypassGuardRef.current) return;
+    event.preventDefault();
+    confirmLeave(() => navigation.dispatch(event.data.action));
+  }), [confirmLeave, hasUnsavedChanges, navigation]);
+
+  useEffect(() => {
+    if (!tabNavigation) return;
+    return tabNavigation.addListener("tabPress", (event) => {
+      const state = tabNavigation.getState();
+      const target = state.routes.find((route) => route.key === event.target);
+      if (!target || target.name === "settings" || !hasUnsavedChanges || bypassGuardRef.current) return;
+      event.preventDefault();
+      confirmLeave(() => {
+        const latest = tabNavigation.getState().routes.find((route) => route.key === event.target);
+        if (latest) tabNavigation.navigate(latest.name);
+      });
+    });
+  }, [confirmLeave, hasUnsavedChanges, tabNavigation]);
 
   return <ScreenContainer className="px-5" edges={["top", "left", "right"]}>
     <View style={styles.page}>
       <View style={styles.topBar}>
         <View style={styles.titleGroup}><Text style={styles.title}>{copy.title}</Text><Text style={styles.subtitle}>{copy.subtitle}</Text></View>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={copy.save} style={styles.topSave} onPress={save}><MaterialIcons color="#FFFFFF" name="check" size={19} /><Text style={styles.topSaveText}>{copy.save}</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={copy.save} disabled={!hasUnsavedChanges} style={[styles.topSave, !hasUnsavedChanges && styles.topSaveDisabled]} onPress={() => saveDraft(true)}><MaterialIcons color="#FFFFFF" name="check" size={18} /><Text style={styles.topSaveText}>{copy.save}</Text></TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.section}>{copy.format}</Text>
-        <View style={styles.card}>
-          <View style={styles.formatRow}><View><Text style={styles.optionTitle}>{copy.wav}</Text><Text style={styles.optionHelper}>{copy.formatHint}</Text></View><View style={styles.formatBadge}><MaterialIcons color="#1E8B61" name="graphic-eq" size={18} /><Text style={styles.formatBadgeText}>{copy.wav}</Text></View></View>
-          <Divider />
-          <Text style={styles.optionTitle}>{copy.depth}</Text><Text style={styles.optionHelper}>{copy.depthHint}</Text>
-          <View style={styles.segment}>{bitDepths.map((bitDepth) => <TouchableOpacity key={bitDepth} style={[styles.segmentItem, draft.bitDepth === bitDepth && styles.segmentSelected]} onPress={() => setDraft((current) => ({ ...current, bitDepth }))}><Text style={[styles.segmentText, draft.bitDepth === bitDepth && styles.segmentTextSelected]}>{bitDepth}-bit</Text></TouchableOpacity>)}</View>
-          <Divider />
-          <OptionRow title={copy.sample} helper={copy.sampleHint} options={sampleRates} value={draft.sampleRate} unit="Hz" onChange={(sampleRate) => setDraft((current) => ({ ...current, sampleRate }))} />
-          <Divider />
-          <Text style={styles.optionTitle}>{copy.channels}</Text><Text style={styles.optionHelper}>{copy.channelsHint}</Text>
-          <View style={styles.segment}>{[1, 2].map((channels) => <TouchableOpacity key={channels} style={[styles.segmentItem, draft.channels === channels && styles.segmentSelected]} onPress={() => setDraft((current) => ({ ...current, channels: channels as 1 | 2 }))}><Text style={[styles.segmentText, draft.channels === channels && styles.segmentTextSelected]}>{channels === 1 ? copy.mono : copy.stereo}</Text></TouchableOpacity>)}</View>
-        </View>
-        <Text style={styles.section}>{copy.silence}</Text>
-        <View style={styles.card}><Text style={styles.optionTitle}>{copy.leading}</Text><Text style={styles.optionHelper}>{copy.leadingHint}</Text><NumberInput value={draft.leadingSilenceMs} unit={copy.milliseconds} onChange={(leadingSilenceMs) => setDraft((current) => ({ ...current, leadingSilenceMs }))} /><Divider /><Text style={styles.optionTitle}>{copy.trailing}</Text><Text style={styles.optionHelper}>{copy.trailingHint}</Text><NumberInput value={draft.trailingSilenceMs} unit={copy.milliseconds} onChange={(trailingSilenceMs) => setDraft((current) => ({ ...current, trailingSilenceMs }))} /></View>
-        <View style={styles.note}><MaterialIcons color="#2F4DA0" name="info-outline" size={19} /><Text style={styles.noteText}>{copy.note}</Text></View>
-        <SettingsFooter versionLabel={zh ? "版本" : "Version"} version={appVersion} />
-      </ScrollView>
+      <View style={styles.card}>
+        <View style={styles.formatRow}><View style={styles.formatIcon}><MaterialIcons color="#1E8B61" name="graphic-eq" size={19} /></View><View style={styles.formatCopy}><Text style={styles.formatTitle}>{copy.format}</Text><Text style={styles.formatHint}>PCM</Text></View><Text style={styles.fixedBadge}>WAV</Text></View>
+        <View style={styles.divider} />
+        <SettingLine label={copy.depth}><Segment labels={bitDepths.map((value) => `${value}-bit`)} selectedIndex={bitDepths.indexOf(draft.bitDepth)} onSelect={(index) => setDraft((current) => ({ ...current, bitDepth: bitDepths[index] }))} /></SettingLine>
+        <SettingLine label={copy.sample}><View style={styles.rateGrid}>{sampleRates.map((rate) => <TouchableOpacity key={rate} onPress={() => setDraft((current) => ({ ...current, sampleRate: rate }))} style={[styles.rateChip, draft.sampleRate === rate && styles.rateChipSelected]}><Text style={[styles.rateText, draft.sampleRate === rate && styles.rateTextSelected]}>{rate === 44100 ? "44.1k" : `${rate / 1000}k`}</Text></TouchableOpacity>)}</View></SettingLine>
+        <SettingLine label={copy.channels}><Segment labels={[copy.mono, copy.stereo]} selectedIndex={draft.channels - 1} onSelect={(index) => setDraft((current) => ({ ...current, channels: (index + 1) as 1 | 2 }))} /></SettingLine>
+        <View style={styles.divider} />
+        <Text style={styles.groupLabel}>{copy.silence}</Text>
+        <View style={styles.silenceRow}><CompactNumber label={copy.leading} unit={copy.milliseconds} value={draft.leadingSilenceMs} onChange={(leadingSilenceMs) => setDraft((current) => ({ ...current, leadingSilenceMs }))} /><CompactNumber label={copy.trailing} unit={copy.milliseconds} value={draft.trailingSilenceMs} onChange={(trailingSilenceMs) => setDraft((current) => ({ ...current, trailingSilenceMs }))} /></View>
+      </View>
+      <View style={styles.note}><MaterialIcons color="#2F4DA0" name="info-outline" size={17} /><Text style={styles.noteText}>{copy.note}</Text></View>
+      <SettingsFooter versionLabel={zh ? "版本" : "Version"} version={appVersion} />
     </View>
   </ScreenContainer>;
 }
 
-const Divider = () => <View style={styles.divider} />;
-function OptionRow({ title, helper, options, value, unit, onChange }: { title: string; helper: string; options: number[]; value: number; unit: string; onChange: (value: number) => void }) { return <View><Text style={styles.optionTitle}>{title}</Text><Text style={styles.optionHelper}>{helper}</Text><View style={styles.chips}>{options.map((option) => <TouchableOpacity key={option} style={[styles.chip, value === option && styles.chipActive]} onPress={() => onChange(option)}><Text style={[styles.chipText, value === option && styles.chipTextActive]}>{option} {unit}</Text></TouchableOpacity>)}</View></View>; }
-function NumberInput({ value, unit, onChange }: { value: number; unit: string; onChange: (value: number) => void }) { return <View style={styles.numberRow}><TextInput value={String(value)} keyboardType="number-pad" onChangeText={(text) => onChange(Number(text.replace(/[^0-9]/g, "")) || 0)} style={styles.numberInput} /><Text style={styles.unit}>{unit}</Text></View>; }
+function SettingLine({ label, children }: { label: string; children: React.ReactNode }) { return <View style={styles.settingLine}><Text style={styles.lineLabel}>{label}</Text><View style={styles.lineControl}>{children}</View></View>; }
+function Segment({ labels, selectedIndex, onSelect }: { labels: string[]; selectedIndex: number; onSelect: (index: number) => void }) { return <View style={styles.segment}>{labels.map((label, index) => <TouchableOpacity key={label} onPress={() => onSelect(index)} style={[styles.segmentItem, selectedIndex === index && styles.segmentSelected]}><Text style={[styles.segmentText, selectedIndex === index && styles.segmentTextSelected]}>{label}</Text></TouchableOpacity>)}</View>; }
+function CompactNumber({ label, unit, value, onChange }: { label: string; unit: string; value: number; onChange: (value: number) => void }) { return <View style={styles.numberCard}><Text style={styles.numberLabel}>{label}</Text><View style={styles.numberValue}><TextInput value={String(value)} keyboardType="number-pad" maxLength={5} onChangeText={(text) => onChange(Number(text.replace(/[^0-9]/g, "")) || 0)} style={styles.numberInput} /><Text style={styles.unit}>{unit}</Text></View></View>; }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 }, topBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 14, paddingTop: 10 }, titleGroup: { flex: 1, paddingRight: 12 }, title: { color: "#182033", fontSize: 27, fontWeight: "800", letterSpacing: -0.5 }, subtitle: { color: "#65708A", fontSize: 13, marginTop: 4 }, topSave: { alignItems: "center", backgroundColor: "#2F4DA0", borderRadius: 13, flexDirection: "row", gap: 5, paddingHorizontal: 14, paddingVertical: 11 }, topSaveText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" }, content: { paddingBottom: 32 }, section: { color: "#3F4A62", fontSize: 14, fontWeight: "800", letterSpacing: 0.3, marginBottom: 9, marginTop: 18 }, card: { backgroundColor: "#FFFFFF", borderColor: "#E4E8F0", borderRadius: 18, borderWidth: 1, padding: 17 }, formatRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, formatBadge: { alignItems: "center", backgroundColor: "#E8F7EF", borderRadius: 10, flexDirection: "row", gap: 5, paddingHorizontal: 10, paddingVertical: 8 }, formatBadgeText: { color: "#1E8B61", fontSize: 13, fontWeight: "800" }, optionTitle: { color: "#182033", fontSize: 16, fontWeight: "800" }, optionHelper: { color: "#65708A", fontSize: 13, lineHeight: 19, marginTop: 4 }, chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }, chip: { backgroundColor: "#F2F4F8", borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9 }, chipActive: { backgroundColor: "#E7EEFF", borderColor: "#2F4DA0", borderWidth: 1 }, chipText: { color: "#59647B", fontSize: 13, fontWeight: "700" }, chipTextActive: { color: "#2F4DA0" }, divider: { backgroundColor: "#E8EBF3", height: 1, marginVertical: 18 }, segment: { backgroundColor: "#EEF1F7", borderRadius: 11, flexDirection: "row", marginTop: 14, padding: 3 }, segmentItem: { alignItems: "center", borderRadius: 8, flex: 1, paddingVertical: 10 }, segmentSelected: { backgroundColor: "#FFFFFF", elevation: 1 }, segmentText: { color: "#65708A", fontSize: 14, fontWeight: "700" }, segmentTextSelected: { color: "#2F4DA0" }, numberRow: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 13 }, numberInput: { backgroundColor: "#F2F4F8", borderRadius: 10, color: "#182033", fontSize: 16, fontWeight: "700", paddingHorizontal: 13, paddingVertical: 10, width: 110 }, unit: { color: "#65708A", fontSize: 14 }, note: { alignItems: "flex-start", backgroundColor: "#EAF0FF", borderRadius: 14, flexDirection: "row", gap: 10, marginTop: 20, padding: 14 }, noteText: { color: "#415273", flex: 1, fontSize: 13, lineHeight: 20 },
+  page: { flex: 1, paddingTop: 9 }, topBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingBottom: 12 }, titleGroup: { flex: 1, minWidth: 0, paddingRight: 12 }, title: { color: "#182033", fontSize: 25, fontWeight: "900", letterSpacing: -0.4 }, subtitle: { color: "#65708A", fontSize: 12, marginTop: 3 }, topSave: { alignItems: "center", backgroundColor: "#2F4DA0", borderRadius: 12, flexDirection: "row", gap: 4, paddingHorizontal: 13, paddingVertical: 10 }, topSaveDisabled: { backgroundColor: "#A9B5D5" }, topSaveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" }, card: { backgroundColor: "#FFFFFF", borderColor: "#E4E8F0", borderRadius: 18, borderWidth: 1, padding: 14 }, formatRow: { alignItems: "center", flexDirection: "row" }, formatIcon: { alignItems: "center", backgroundColor: "#E8F7EF", borderRadius: 10, height: 34, justifyContent: "center", width: 34 }, formatCopy: { flex: 1, marginLeft: 9 }, formatTitle: { color: "#182033", fontSize: 15, fontWeight: "900" }, formatHint: { color: "#65708A", fontSize: 11, fontWeight: "700", marginTop: 1 }, fixedBadge: { backgroundColor: "#E8F7EF", borderRadius: 8, color: "#1E8B61", fontSize: 12, fontWeight: "900", overflow: "hidden", paddingHorizontal: 8, paddingVertical: 5 }, divider: { backgroundColor: "#E8EBF3", height: 1, marginVertical: 11 }, settingLine: { alignItems: "center", flexDirection: "row", minHeight: 43 }, lineLabel: { color: "#3F4A62", fontSize: 13, fontWeight: "800", width: 74 }, lineControl: { flex: 1 }, segment: { backgroundColor: "#EEF1F7", borderRadius: 9, flexDirection: "row", padding: 2 }, segmentItem: { alignItems: "center", borderRadius: 7, flex: 1, paddingVertical: 7 }, segmentSelected: { backgroundColor: "#FFFFFF", elevation: 1 }, segmentText: { color: "#65708A", fontSize: 12, fontWeight: "800" }, segmentTextSelected: { color: "#2F4DA0" }, rateGrid: { flexDirection: "row", gap: 5 }, rateChip: { alignItems: "center", backgroundColor: "#F2F4F8", borderRadius: 8, flex: 1, paddingVertical: 8 }, rateChipSelected: { backgroundColor: "#E7EEFF", borderColor: "#2F4DA0", borderWidth: 1, paddingVertical: 7 }, rateText: { color: "#65708A", fontSize: 11, fontWeight: "800" }, rateTextSelected: { color: "#2F4DA0" }, groupLabel: { color: "#65708A", fontSize: 11, fontWeight: "900", letterSpacing: 0.6, marginBottom: 8 }, silenceRow: { flexDirection: "row", gap: 8 }, numberCard: { backgroundColor: "#F6F8FC", borderRadius: 11, flex: 1, paddingHorizontal: 10, paddingVertical: 8 }, numberLabel: { color: "#65708A", fontSize: 11, fontWeight: "800" }, numberValue: { alignItems: "center", flexDirection: "row", marginTop: 2 }, numberInput: { color: "#182033", fontSize: 18, fontVariant: ["tabular-nums"], fontWeight: "900", minWidth: 42, padding: 0 }, unit: { color: "#8A95AA", fontSize: 11, marginLeft: 3 }, note: { alignItems: "center", backgroundColor: "#EAF0FF", borderRadius: 12, flexDirection: "row", gap: 8, marginTop: 10, paddingHorizontal: 12, paddingVertical: 9 }, noteText: { color: "#415273", flex: 1, fontSize: 11, lineHeight: 15 },
 });
