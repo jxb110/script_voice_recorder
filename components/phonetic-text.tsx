@@ -1,6 +1,23 @@
-import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
+
 import type { ScriptToken } from "@/shared/recorder-types";
-export function PhoneticText({ tokens }: { tokens: ScriptToken[] }) { return <View style={styles.line} accessibilityLabel={tokens.map((token) => token.char).join("")}>{tokens.map((token, index) => <View key={`${token.char}-${index}`} style={styles.token}><Text style={styles.pinyin}>{token.pinyin ?? " "}</Text><Text style={styles.character}>{token.char}</Text></View>)}</View>; }
-export function RecordingWaveform({ level, active }: { level?: number; active: boolean }) { const bars = useMemo(() => { const normalized = Math.min(1, Math.max(0.08, ((level ?? -55) + 60) / 60)); return Array.from({ length: 28 }, (_, index) => Math.max(5, Math.round(7 + (active ? normalized : 0.18) * (0.28 + Math.abs(Math.sin(index * 0.74)) * 0.72) * 35))); }, [active, level]); return <View style={styles.wave}>{bars.map((height, index) => <View key={index} style={[styles.bar, { height }, active && styles.activeBar]} />)}</View>; }
-const styles = StyleSheet.create({ line: { alignItems: "flex-end", flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: 8 }, token: { alignItems: "center", minWidth: 31, paddingHorizontal: 1 }, pinyin: { color: "#65708A", fontSize: 13, lineHeight: 18, minHeight: 18, textAlign: "center" }, character: { color: "#182033", fontSize: 29, fontWeight: "700", lineHeight: 39, textAlign: "center" }, wave: { alignItems: "center", flexDirection: "row", gap: 4, height: 52, justifyContent: "center" }, bar: { backgroundColor: "#C6CDDE", borderRadius: 10, width: 4 }, activeBar: { backgroundColor: "#D64646" } });
+
+export function PhoneticText({ tokens }: { tokens: ScriptToken[] }) {
+  return (
+    <View style={styles.line} accessibilityLabel={tokens.map((token) => token.char).join("")}>
+      {tokens.map((token, index) => (
+        <View key={`${token.char}-${index}`} style={styles.token}>
+          <Text style={styles.pinyin}>{token.pinyin ?? " "}</Text>
+          <Text style={styles.character}>{token.char}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  line: { alignItems: "flex-end", flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: 8 },
+  token: { alignItems: "center", minWidth: 31, paddingHorizontal: 1 },
+  pinyin: { color: "#65708A", fontSize: 13, lineHeight: 18, minHeight: 18, textAlign: "center" },
+  character: { color: "#182033", fontSize: 29, fontWeight: "700", lineHeight: 39, textAlign: "center" },
+});
