@@ -3,12 +3,15 @@ import * as Network from "expo-network";
 import { Platform } from "react-native";
 import type TcpSocket from "react-native-tcp-socket/lib/types/Socket";
 
+import { createSharedDirectory, deleteSharedEntry, listSharedDirectory, readSharedFileBase64, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess, saveSharedFile, saveSharedText, type SharedStorageEntry } from "@/lib/external-storage";
+import { fileManagerHtmlPage } from "@/lib/lan-file-manager-page";
 import { persistTransferredScript } from "@/lib/recorder-files";
 import type { ScriptProject, Speaker } from "@/shared/recorder-types";
 
 const PORT = 35678;
 const MAX_SCRIPT_SIZE = 3 * 1024 * 1024;
-const MAX_HTTP_REQUEST_SIZE = MAX_SCRIPT_SIZE + 48 * 1024;
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_HTTP_REQUEST_SIZE = Math.ceil(MAX_FILE_SIZE * 1.4) + 64 * 1024;
 
 type ServerState = "stopped" | "starting" | "running" | "error";
 type TcpServer = {
@@ -22,10 +25,10 @@ type HttpRequest = { method: string; path: string; query: URLSearchParams; body:
 type HttpResponse = { status: number; contentType: string; body: string; headers?: Record<string, string> };
 
 export type TransferredScript = { id: string; name: string; uri: string; receivedAt: string };
-export type LanTransferStatus = { running: boolean; starting: boolean; address?: string; token?: string; port: number; error?: string; scripts: TransferredScript[] };
+export type LanTransferStatus = { running: boolean; starting: boolean; address?: string; token?: string; port: number; error?: string; scripts: TransferredScript[]; defaultDirectory: string };
 
 type RecordingDownload = { id: string; name: string; uri: string; size: number; recordedAt?: string };
-type ActiveSession = { address: string; token: string; scripts: TransferredScript[]; projects: ScriptProject[]; speakers: Speaker[] };
+type ActiveSession = { address: string; token: string; scripts: TransferredScript[]; projects: ScriptProject[]; speakers: Speaker[]; defaultDirectory: string };
 
 let activeSession: ActiveSession | null = null;
 let nativeTcp: TcpFactory | null = null;
@@ -59,7 +62,7 @@ function json(body: unknown, status = 200): HttpResponse {
 }
 
 function httpStatusText(status: number) {
-  return status === 200 ? "OK" : status === 400 ? "Bad Request" : status === 401 ? "Unauthorized" : status === 404 ? "Not Found" : status === 413 ? "Payload Too Large" : "Internal Server Error";
+  return status === 200 ? "OK" : status === 400 ? "Bad Request" : status === 401 ? "Unauthorized" : status === 403 ? "Forbidden" : status === 404 ? "Not Found" : status === 413 ? "Payload Too Large" : "Internal Server Error";
 }
 
 function encodeResponse(response: HttpResponse) {
@@ -108,7 +111,58 @@ function htmlPage() {
 
 async function routeRequest(request: HttpRequest): Promise<HttpResponse> {
   if (!isAuthorized(request)) return { status: 401, contentType: "text/plain; charset=utf-8", body: "请输入手机显示的文件快传地址和访问口令。" };
-  if (request.method === "GET" && request.path === "/") return { status: 200, contentType: "text/html; charset=utf-8", body: htmlPage() };
+  if (request.method === "GET" && request.path === "/") return { status: 200, contentType: "text/html; charset=utf-8", body: fileManagerHtmlPage() };
+  if (request.method === "GET" && request.path === "/api/fs/list") {
+    try {
+      const path = request.query.get("path") ?? RECORDINGS_RELATIVE_DIR;
+      const entries = await listSharedDirectory(path);
+      return json({ path, entries: entries.map((entry: SharedStorageEntry) => ({ name: entry.name, relativePath: entry.relativePath, isDirectory: entry.isDirectory, size: entry.size, modifiedAt: entry.modifiedAt })) });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法读取目录。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/mkdir") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { path?: string; name?: string };
+      const path = await createSharedDirectory(payload.path ?? "", payload.name ?? "");
+      return json({ path });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法创建目录。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/upload") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { path?: string; name?: string; base64?: string };
+      if (!payload.base64 || payload.base64.length > MAX_FILE_SIZE * 1.4) throw new Error("文件为空或超过 15 MB 限制。");
+      const path = await saveSharedFile(payload.path ?? "", payload.name ?? "", payload.base64);
+      return json({ path });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法上传文件。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/delete") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { path?: string };
+      await deleteSharedEntry(payload.path ?? "");
+      return json({ deleted: true });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法删除文件。" }, 400); }
+  }
+  if (request.method === "GET" && request.path === "/api/fs/download") {
+    try {
+      const path = request.query.get("path") ?? "";
+      const file = await readSharedFileBase64(path);
+      if (file.size > MAX_FILE_SIZE) throw new Error("单个文件超过 15 MB，请缩小文件后重试。");
+      return json({ name: path.split("/").pop() ?? "download", base64: file.base64 });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法读取文件。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/import-script") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { path?: string; name?: string; content?: string };
+      const name = typeof payload.name === "string" ? payload.name : "";
+      const content = typeof payload.content === "string" ? payload.content : "";
+      if (!name.toLowerCase().endsWith(".txt")) throw new Error("仅支持 TXT 脚本文件。 ");
+      if (!content || new TextEncoder().encode(content).length > MAX_SCRIPT_SIZE) throw new Error("脚本为空或超过 3 MB 限制。");
+      await saveSharedText(payload.path ?? RECORDINGS_RELATIVE_DIR, name, content);
+      const uri = await persistTransferredScript(name, content);
+      const script = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name: safeFileName(name), uri, receivedAt: new Date().toISOString() };
+      activeSession?.scripts.unshift(script);
+      return json({ script });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法接收脚本。" }, 400); }
+  }
   if (request.method === "GET" && request.path === "/api/status") {
     const recordings = await recordingDownloads();
     return json({ scripts: activeSession?.scripts ?? [], recordings: recordings.map(({ id, name, size }) => ({ id, name, size })) });
@@ -192,14 +246,16 @@ export async function startLanFileTransfer(projects: ScriptProject[], speakers: 
     return getLanFileTransferStatus();
   }
   if (serverState === "starting") return getLanFileTransferStatus();
+  await requestAllFilesAccess();
   const ip = await Network.getIpAddressAsync();
   if (!ip || ip === "0.0.0.0") throw new Error("未能读取手机局域网地址。请连接 Wi-Fi 后重试。");
-  activeSession = { address: `http://${ip}:${PORT}`, token: makeToken(), scripts: [], projects, speakers };
+  const session: ActiveSession = { address: `http://${ip}:${PORT}`, token: makeToken(), scripts: [], projects, speakers, defaultDirectory: RECORDINGS_RELATIVE_DIR };
+  activeSession = session;
   serverState = "starting";
   serverError = undefined;
   try {
     await listenOnLan(ip);
-    await verifyListening(activeSession);
+    await verifyListening(session);
     serverState = "running";
     return getLanFileTransferStatus();
   } catch (error) {
@@ -216,7 +272,7 @@ export function updateLanFileTransferData(projects: ScriptProject[], speakers: S
 }
 
 export function getLanFileTransferStatus(): LanTransferStatus {
-  return activeSession ? { running: serverState === "running", starting: serverState === "starting", address: activeSession.address, token: activeSession.token, port: PORT, error: serverError, scripts: activeSession.scripts } : { running: false, starting: false, port: PORT, error: serverError, scripts: [] };
+  return activeSession ? { running: serverState === "running", starting: serverState === "starting", address: activeSession.address, token: activeSession.token, port: PORT, error: serverError, scripts: activeSession.scripts, defaultDirectory: activeSession.defaultDirectory } : { running: false, starting: false, port: PORT, error: serverError, scripts: [], defaultDirectory: RECORDINGS_RELATIVE_DIR };
 }
 
 export function stopLanFileTransfer() {
