@@ -147,3 +147,13 @@ export async function createRecordingArchive(project: ScriptProject, speaker: Sp
   await FileSystem.writeAsStringAsync(target, bytesToBase64(archive), { encoding: FileSystem.EncodingType.Base64 });
   return target;
 }
+
+export async function deleteProjectLocalFiles(project: ScriptProject) {
+  if (Platform.OS === "web") return;
+  const paths = new Set([project.sourceFileUri, ...project.sentences.map((sentence) => sentence.recordingUri)].filter((uri): uri is string => Boolean(uri)));
+  await Promise.all(Array.from(paths).map(async (uri) => {
+    if (!uri.startsWith(ROOT_DIRECTORY)) return;
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists) await FileSystem.deleteAsync(uri, { idempotent: true });
+  }));
+}

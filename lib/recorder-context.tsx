@@ -1,12 +1,113 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
-import { persistRecording } from "@/lib/recorder-files";
-import { DEFAULT_RECORDER_SETTINGS, type RecorderSettings, type RecorderStore, type ScriptProject, type Speaker } from "@/shared/recorder-types";
+
+import { deleteProjectLocalFiles, persistRecording } from "@/lib/recorder-files";
+import { canReplaceProjectScript } from "@/lib/project-rules";
+import { DEFAULT_RECORDER_SETTINGS, type RecorderSettings, type RecorderStore, type ScriptProject, type ScriptSentence, type Speaker } from "@/shared/recorder-types";
+
 const STORAGE_KEY = "script-voice-recorder.v1";
 const EMPTY_STORE: RecorderStore = { speakers: [], projects: [], settings: DEFAULT_RECORDER_SETTINGS };
 type NewProject = Omit<ScriptProject, "id" | "createdAt" | "updatedAt">;
-type RecorderContextValue = { loaded: boolean; speakers: Speaker[]; projects: ScriptProject[]; settings: RecorderSettings; createSpeaker: (input: Omit<Speaker, "id" | "createdAt">) => Speaker; updateSpeaker: (speakerId: string, input: Omit<Speaker, "id" | "createdAt">) => void; createProject: (input: NewProject) => ScriptProject; updateSettings: (input: RecorderSettings) => void; saveSentenceRecording: (projectId: string, sentenceId: string, sourceUri: string) => Promise<string> };
+type ScriptReplacement = Pick<ScriptProject, "sourceFileName" | "sourceFileUri" | "sentences">;
+
+type RecorderContextValue = {
+  loaded: boolean;
+  speakers: Speaker[];
+  projects: ScriptProject[];
+  settings: RecorderSettings;
+  createSpeaker: (input: Omit<Speaker, "id" | "createdAt">) => Speaker;
+  updateSpeaker: (speakerId: string, input: Omit<Speaker, "id" | "createdAt">) => void;
+  createProject: (input: NewProject) => ScriptProject;
+  deleteProject: (projectId: string) => void;
+  replaceProjectScript: (projectId: string, replacement: ScriptReplacement) => void;
+  updateSettings: (input: RecorderSettings) => void;
+  saveSentenceRecording: (projectId: string, sentenceId: string, sourceUri: string) => Promise<string>;
+};
+
 const RecorderContext = createContext<RecorderContextValue | null>(null);
 const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-export function RecorderProvider({ children }: PropsWithChildren) { const [store, setStore] = useState<RecorderStore>(EMPTY_STORE); const [loaded, setLoaded] = useState(false); useEffect(() => { AsyncStorage.getItem(STORAGE_KEY).then((stored) => { if (!stored) return; const parsed = JSON.parse(stored) as Partial<RecorderStore>; setStore({ speakers: parsed.speakers ?? [], projects: parsed.projects ?? [], settings: { ...DEFAULT_RECORDER_SETTINGS, ...(parsed.settings ?? {}) } }); }).catch(() => setStore(EMPTY_STORE)).finally(() => setLoaded(true)); }, []); const commit = useCallback((updater: (current: RecorderStore) => RecorderStore) => { setStore((current) => { const next = updater(current); void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)); return next; }); }, []); const createSpeaker = useCallback((input: Omit<Speaker, "id" | "createdAt">) => { const speaker: Speaker = { ...input, id: makeId("speaker"), createdAt: new Date().toISOString() }; commit((current) => ({ ...current, speakers: [speaker, ...current.speakers] })); return speaker; }, [commit]); const updateSpeaker = useCallback((speakerId: string, input: Omit<Speaker, "id" | "createdAt">) => commit((current) => ({ ...current, speakers: current.speakers.map((speaker) => speaker.id === speakerId ? { ...speaker, ...input } : speaker) })), [commit]); const createProject = useCallback((input: NewProject) => { const now = new Date().toISOString(); const project: ScriptProject = { ...input, id: makeId("project"), createdAt: now, updatedAt: now }; commit((current) => ({ ...current, projects: [project, ...current.projects] })); return project; }, [commit]); const updateSettings = useCallback((settings: RecorderSettings) => commit((current) => ({ ...current, settings })), [commit]); const saveSentenceRecording = useCallback(async (projectId: string, sentenceId: string, sourceUri: string) => { const project = store.projects.find((item) => item.id === projectId); if (!project) throw new Error("录音任务不存在。"); const speaker = store.speakers.find((item) => item.id === project.speakerId); if (!speaker) throw new Error("当前任务缺少发音人信息。"); const sentence = project.sentences.find((item) => item.id === sentenceId); if (!sentence) throw new Error("当前句子不存在。"); const persistedUri = await persistRecording(sourceUri, project, sentence, speaker); commit((current) => ({ ...current, projects: current.projects.map((item) => item.id !== projectId ? item : { ...item, updatedAt: new Date().toISOString(), sentences: item.sentences.map((line) => line.id === sentenceId ? { ...line, recordingUri: persistedUri, recordedAt: new Date().toISOString() } : line) }) })); return persistedUri; }, [commit, store.projects, store.speakers]); const value = useMemo(() => ({ loaded, ...store, createSpeaker, updateSpeaker, createProject, updateSettings, saveSentenceRecording }), [createProject, createSpeaker, loaded, saveSentenceRecording, store, updateSettings, updateSpeaker]); return <RecorderContext.Provider value={value}>{children}</RecorderContext.Provider>; }
-export function useRecorder() { const context = useContext(RecorderContext); if (!context) throw new Error("useRecorder 必须在 RecorderProvider 内使用。"); return context; }
+
+export function RecorderProvider({ children }: PropsWithChildren) {
+  const [store, setStore] = useState<RecorderStore>(EMPTY_STORE);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((stored) => {
+        if (!stored) return;
+        const parsed = JSON.parse(stored) as Partial<RecorderStore>;
+        setStore({ speakers: parsed.speakers ?? [], projects: parsed.projects ?? [], settings: { ...DEFAULT_RECORDER_SETTINGS, ...(parsed.settings ?? {}) } });
+      })
+      .catch(() => setStore(EMPTY_STORE))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const commit = useCallback((updater: (current: RecorderStore) => RecorderStore) => {
+    setStore((current) => {
+      const next = updater(current);
+      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const createSpeaker = useCallback((input: Omit<Speaker, "id" | "createdAt">) => {
+    const speaker: Speaker = { ...input, id: makeId("speaker"), createdAt: new Date().toISOString() };
+    commit((current) => ({ ...current, speakers: [speaker, ...current.speakers] }));
+    return speaker;
+  }, [commit]);
+
+  const updateSpeaker = useCallback((speakerId: string, input: Omit<Speaker, "id" | "createdAt">) => {
+    commit((current) => ({ ...current, speakers: current.speakers.map((speaker) => speaker.id === speakerId ? { ...speaker, ...input } : speaker) }));
+  }, [commit]);
+
+  const createProject = useCallback((input: NewProject) => {
+    const now = new Date().toISOString();
+    const project: ScriptProject = { ...input, id: makeId("project"), createdAt: now, updatedAt: now };
+    commit((current) => ({ ...current, projects: [project, ...current.projects] }));
+    return project;
+  }, [commit]);
+
+  const deleteProject = useCallback((projectId: string) => {
+    const target = store.projects.find((project) => project.id === projectId);
+    commit((current) => ({ ...current, projects: current.projects.filter((project) => project.id !== projectId) }));
+    if (target) void deleteProjectLocalFiles(target);
+  }, [commit, store.projects]);
+
+  const replaceProjectScript = useCallback((projectId: string, replacement: ScriptReplacement) => {
+    commit((current) => {
+      const target = current.projects.find((project) => project.id === projectId);
+      if (!target) throw new Error("录音任务不存在。");
+      if (!canReplaceProjectScript(target)) throw new Error("已有录音进度，无法更换脚本文本。");
+      return {
+        ...current,
+        projects: current.projects.map((project) => project.id === projectId ? { ...project, ...replacement, updatedAt: new Date().toISOString() } : project),
+      };
+    });
+  }, [commit]);
+
+  const updateSettings = useCallback((settings: RecorderSettings) => commit((current) => ({ ...current, settings })), [commit]);
+
+  const saveSentenceRecording = useCallback(async (projectId: string, sentenceId: string, sourceUri: string) => {
+    const project = store.projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("录音任务不存在。");
+    const speaker = store.speakers.find((item) => item.id === project.speakerId);
+    if (!speaker) throw new Error("当前任务缺少发音人信息。");
+    const sentence = project.sentences.find((item) => item.id === sentenceId);
+    if (!sentence) throw new Error("当前句子不存在。");
+    const persistedUri = await persistRecording(sourceUri, project, sentence, speaker);
+    commit((current) => ({
+      ...current,
+      projects: current.projects.map((item) => item.id !== projectId ? item : { ...item, updatedAt: new Date().toISOString(), sentences: item.sentences.map((line) => line.id === sentenceId ? { ...line, recordingUri: persistedUri, recordedAt: new Date().toISOString() } : line) }),
+    }));
+    return persistedUri;
+  }, [commit, store.projects, store.speakers]);
+
+  const value = useMemo(() => ({ loaded, ...store, createSpeaker, updateSpeaker, createProject, deleteProject, replaceProjectScript, updateSettings, saveSentenceRecording }), [createProject, createSpeaker, deleteProject, loaded, replaceProjectScript, saveSentenceRecording, store, updateSettings, updateSpeaker]);
+  return <RecorderContext.Provider value={value}>{children}</RecorderContext.Provider>;
+}
+
+export function useRecorder() {
+  const context = useContext(RecorderContext);
+  if (!context) throw new Error("useRecorder 必须在 RecorderProvider 内使用。");
+  return context;
+}
