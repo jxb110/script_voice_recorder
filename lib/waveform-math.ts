@@ -20,6 +20,14 @@ export function waveformDisplayStrength(sample: number) {
   return Math.pow(Math.min(1, Math.max(0, activeRange)), 0.58);
 }
 
+/** Returns a symmetric half-bar height that always remains inside the waveform drawing bounds. */
+export function waveformBarHalfHeight(sample: number, totalHeight: number, edgeInset = 5) {
+  const safeHalfHeight = Math.max(1, totalHeight / 2 - Math.max(0, edgeInset));
+  if (classifyWaveformSample(sample) === "silence") return Math.min(safeHalfHeight, 1.2);
+  const rawHeight = 2.6 + waveformDisplayStrength(sample) * safeHalfHeight * 0.94;
+  return Math.min(safeHalfHeight, Math.max(1.7, rawHeight));
+}
+
 export function appendWaveformSample(samples: number[], level?: number, maximum = MAX_WAVEFORM_SAMPLES) {
   const normalized = normalizeMetering(level);
   if (normalized === null) return samples;

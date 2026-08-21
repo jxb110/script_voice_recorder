@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appendWaveformSample, classifyWaveformSample, normalizeMetering, resampleWaveform, waveformDisplayStrength } from "@/lib/waveform-math";
+import { appendWaveformSample, classifyWaveformSample, normalizeMetering, resampleWaveform, waveformBarHalfHeight, waveformDisplayStrength } from "@/lib/waveform-math";
 
 describe("录音波形数据转换", () => {
   it("将 Android 的负分贝计量归一化为可绘制强度", () => {
@@ -34,5 +34,13 @@ describe("录音波形数据转换", () => {
     expect(classifyWaveformSample(normalizeMetering(-25)!)).toBe("voice");
     expect(waveformDisplayStrength(normalizeMetering(-65)!)).toBe(0);
     expect(waveformDisplayStrength(normalizeMetering(-25)!)).toBeGreaterThan(0.6);
+  });
+
+  it("在任意输入振幅下将双边波形严格限制在显示高度内", () => {
+    const height = 58;
+    const safeHalfHeight = height / 2 - 5;
+    expect(waveformBarHalfHeight(0.025, height)).toBeLessThanOrEqual(safeHalfHeight);
+    expect(waveformBarHalfHeight(1, height)).toBeLessThanOrEqual(safeHalfHeight);
+    expect(waveformBarHalfHeight(1, height)).toBeGreaterThan(waveformBarHalfHeight(0.025, height));
   });
 });
