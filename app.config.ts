@@ -28,11 +28,11 @@ const schemeFromBundleId = `manus${timestamp}`;
 
 const env = {
   // App branding - update these values directly (do not use env vars)
-  appName: "Script Voice Recorder",
+  appName: "采音脚本",
   appSlug: "script_voice_recorder",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "",
+  logoUrl: "/manus-storage/script_voice_recorder_icon_b4d00224.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -64,7 +64,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: ["RECORD_AUDIO", "POST_NOTIFICATIONS"],
     intentFilters: [
       {
         action: "VIEW",
@@ -122,7 +122,7 @@ const config: ExpoConfig = {
     ],
   ],
   experiments: {
-    typedRoutes: true,
+    typedRoutes: false,
     reactCompiler: true,
   },
 };
