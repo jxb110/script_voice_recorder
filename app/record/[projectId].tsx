@@ -11,6 +11,7 @@ import { AudioWaveform } from "@/components/audio-waveform";
 import { PhoneticText } from "@/components/phonetic-text";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAppLanguage } from "@/lib/i18n";
+import { shouldAnimatePromptChange } from "@/lib/prompt-animation";
 import { clampReadingFontSize, READING_FONT_SIZE } from "@/lib/reading-font";
 import { useRecorder } from "@/lib/recorder-context";
 import { canContinueRecordingSession, isProjectRecordingComplete } from "@/lib/recording-session";
@@ -37,6 +38,7 @@ export default function RecordingScreen() {
   const pauseCancellerRef = useRef<(() => void) | null>(null);
   const nativeOperationRef = useRef<Promise<void>>(Promise.resolve());
   const promptWave = useRef(new Animated.Value(0)).current;
+  const previousPromptRef = useRef<string | null>(null);
   const player = useAudioPlayer(null, { updateInterval: 90 });
   const playerStatus = useAudioPlayerStatus(player);
   const recorderOptions = useMemo(() => ({
@@ -55,6 +57,7 @@ export default function RecordingScreen() {
   const isBusy = phase !== "idle" || isClosing;
   const playbackProgress = playerStatus.duration > 0 ? playerStatus.currentTime / playerStatus.duration : 0;
   const projectComplete = isProjectRecordingComplete(project?.sentences.map((item) => item.recordingUri) ?? []);
+  const promptContent = sentence?.prompt || t("ready");
 
   const cancelPendingOperation = () => {
     lifecycleTokenRef.current += 1;
@@ -89,14 +92,19 @@ export default function RecordingScreen() {
   useEffect(() => { setCurrentIndex(Math.min(Math.max(0, Number(sentenceParam) || 0), Math.max(0, total - 1))); }, [sentenceParam, total]);
   useEffect(() => { setReadingFontSize(settings.readingFontSize); }, [settings.readingFontSize]);
   useEffect(() => {
+    if (!sentence) return;
+    const shouldAnimate = shouldAnimatePromptChange(previousPromptRef.current, promptContent);
+    previousPromptRef.current = promptContent;
+    promptWave.stopAnimation();
     promptWave.setValue(0);
+    if (!shouldAnimate) return;
     const animation = Animated.sequence([
       Animated.timing(promptWave, { toValue: 1, duration: 460, useNativeDriver: true }),
       Animated.timing(promptWave, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]);
     animation.start();
     return () => animation.stop();
-  }, [promptWave, sentence?.id]);
+  }, [promptContent, promptWave, sentence?.id]);
   useEffect(() => {
     if (phase !== "recording") return;
     setLiveWaveform((current) => appendWaveformSample(current, recorderState.metering));
@@ -170,7 +178,7 @@ export default function RecordingScreen() {
         <View style={styles.promptBox}>
           <Text style={styles.promptLabel}>{t("prompt")}</Text>
           <View style={styles.promptTextWrapper}>
-            <Animated.Text style={[styles.promptText, { transform: [{ scale: promptWave.interpolate({ inputRange: [0, 0.36, 1], outputRange: [1, 1.025, 1] }) }] }]}>{sentence.prompt || t("ready")}</Animated.Text>
+            <Animated.Text style={[styles.promptText, { transform: [{ scale: promptWave.interpolate({ inputRange: [0, 0.36, 1], outputRange: [1, 1.025, 1] }) }] }]}>{promptContent}</Animated.Text>
             <Animated.View pointerEvents="none" style={[styles.promptRipple, promptRippleStyle]} />
           </View>
         </View>
