@@ -22,7 +22,6 @@ export function fileManagerHtmlPage() {
       </div>
       <div id="list" class="file-list"></div><div id="message"></div>
     </section>
-    <section class="card"><div class="drop"><strong>导入录音脚本</strong><p class="muted">选择 TXT 后，文件会保存到当前目录，同时在手机应用中显示为可创建任务的脚本。</p><label class="btn" for="script">选择 TXT 脚本</label><input id="script" type="file" accept=".txt,text/plain"></div></section>
   </main>
   <script>
   (function(){
@@ -32,7 +31,6 @@ export function fileManagerHtmlPage() {
     var pathLabel=document.getElementById('path');
     var message=document.getElementById('message');
     var filesInput=document.getElementById('files');
-    var scriptInput=document.getElementById('script');
     function esc(value){return String(value).replace(/[&<>"']/g,function(char){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]})}
     function api(path,options){var glue=path.indexOf('?')>-1?'&':'?';return fetch(path+glue+'token='+encodeURIComponent(token),options)}
     function sizeText(value){return value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB'}
@@ -50,7 +48,8 @@ export function fileManagerHtmlPage() {
           var encoded=encodeURIComponent(entry.relativePath);
           var open=entry.isDirectory?'<span class="name" data-open="1" data-path="'+encoded+'">'+esc(entry.name)+'</span>':'<span class="name">'+esc(entry.name)+'</span>';
           var download=entry.isDirectory?'':'<button class="small download" data-download="1" data-path="'+encoded+'">下载</button>';
-          return '<div class="row"><span class="icon">'+(entry.isDirectory?'📁':'📄')+'</span>'+open+'<span class="meta">'+(entry.isDirectory?'目录':sizeText(entry.size))+'</span><span class="actions">'+download+'<button class="small delete" data-delete="1" data-path="'+encoded+'">删除</button></span></div>';
+          var folderDownload=entry.isDirectory?'<button class="small download" data-download-folder="1" data-path="'+encoded+'">下载文件夹</button>':'';
+          return '<div class="row"><span class="icon">'+(entry.isDirectory?'📁':'📄')+'</span>'+open+'<span class="meta">'+(entry.isDirectory?'目录':sizeText(entry.size))+'</span><span class="actions">'+download+folderDownload+'<button class="small delete" data-delete="1" data-path="'+encoded+'">删除</button></span></div>';
         }).join('');
       }catch(error){list.innerHTML='<div class="empty">'+esc(showError(error))+'</div>'}
     }
@@ -58,13 +57,13 @@ export function fileManagerHtmlPage() {
     async function createFolder(){var name=prompt('新目录名称');if(!name)return;try{await requestJson('/api/fs/mkdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:current,name:name})});await refresh()}catch(error){showError(error)}}
     async function removeEntry(path){if(!confirm('确定删除“'+path.split('/').pop()+'”吗？此操作不可恢复。'))return;try{await requestJson('/api/fs/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path})});await refresh()}catch(error){showError(error)}}
     async function downloadEntry(path){message.textContent='正在准备下载…';try{var data=await requestJson('/api/fs/download?path='+encodeURIComponent(path));var raw=atob(data.base64);var output=new Uint8Array(raw.length);for(var index=0;index<raw.length;index++)output[index]=raw.charCodeAt(index);var link=document.createElement('a');link.href=URL.createObjectURL(new Blob([output],{type:'application/octet-stream'}));link.download=data.name;link.click();URL.revokeObjectURL(link.href);message.textContent='下载已开始。'}catch(error){showError(error)}}
+    async function downloadFolder(path){message.textContent='正在打包文件夹…';try{var data=await requestJson('/api/fs/download-folder?path='+encodeURIComponent(path));var raw=atob(data.base64);var output=new Uint8Array(raw.length);for(var index=0;index<raw.length;index++)output[index]=raw.charCodeAt(index);var link=document.createElement('a');link.href=URL.createObjectURL(new Blob([output],{type:'application/zip'}));link.download=data.name;link.click();URL.revokeObjectURL(link.href);message.textContent='文件夹下载已开始。'}catch(error){showError(error)}}
     function toBase64(file){return new Promise(function(resolve,reject){var reader=new FileReader();reader.onerror=function(){reject(Error('读取文件失败'))};reader.onload=function(){resolve(String(reader.result).split(',')[1]||'')};reader.readAsDataURL(file)})}
-    async function upload(files,importScript){for(var index=0;index<files.length;index++){var file=files[index];if(file.size>15728640){message.textContent=file.name+' 超过 15 MB 限制。';continue}try{message.textContent='正在上传 '+file.name+'…';if(importScript){await requestJson('/api/import-script',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,content:await file.text(),path:current})})}else{await requestJson('/api/fs/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:current,name:file.name,base64:await toBase64(file)})})}message.textContent='已上传：'+file.name}catch(error){showError(error)}}await refresh()}
+    async function upload(files){var succeeded=0;for(var index=0;index<files.length;index++){var file=files[index];if(file.size>15728640){message.textContent='上传 '+(index+1)+'/'+files.length+'：'+file.name+' 超过 15 MB 限制。';continue}try{message.textContent='正在上传 '+(index+1)+'/'+files.length+'：'+file.name;await requestJson('/api/fs/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:current,name:file.name,base64:await toBase64(file)})});succeeded++}catch(error){showError(error)}}message.textContent='已完成 '+succeeded+'/'+files.length+' 个文件上传。';await refresh()}
     document.getElementById('up').addEventListener('click',function(){current=parent(current);refresh()});
     document.getElementById('mkdir').addEventListener('click',createFolder);
-    list.addEventListener('click',function(event){var target=event.target.closest('[data-open],[data-download],[data-delete]');if(!target)return;var path=encodedPath(target);if(target.hasAttribute('data-open')){current=path;refresh()}else if(target.hasAttribute('data-download')){downloadEntry(path)}else{removeEntry(path)}});
-    filesInput.addEventListener('change',function(){if(filesInput.files)upload(filesInput.files,false);filesInput.value=''});
-    scriptInput.addEventListener('change',function(){var file=scriptInput.files&&scriptInput.files[0];if(file){if(!/\.txt$/i.test(file.name)){message.textContent='仅支持 TXT 脚本。'}else upload([file],true)}scriptInput.value=''});
+    list.addEventListener('click',function(event){var target=event.target.closest('[data-open],[data-download],[data-download-folder],[data-delete]');if(!target)return;var path=encodedPath(target);if(target.hasAttribute('data-open')){current=path;refresh()}else if(target.hasAttribute('data-download')){downloadEntry(path)}else if(target.hasAttribute('data-download-folder')){downloadFolder(path)}else{removeEntry(path)}});
+    filesInput.addEventListener('change',function(){if(filesInput.files)upload(filesInput.files);filesInput.value=''});
     window.onerror=function(_message,_source,_line,_column,error){showError(error||Error('页面脚本异常'))};
     refresh();
   }());

@@ -15,6 +15,15 @@ describe("局域网文件管理页面", () => {
     expect(fileManagerHtmlPage()).toContain("window.onerror=function");
   });
 
+  it("仅保留批量上传入口，并为目录提供递归下载操作", () => {
+    const page = fileManagerHtmlPage();
+
+    expect(page).toContain("已完成 '+succeeded+'/'+files.length+' 个文件上传。");
+    expect(page).toContain("data-download-folder");
+    expect(page).toContain("/api/fs/download-folder?path=");
+    expect(page).not.toContain("导入录音脚本");
+  });
+
   it("生成的浏览器脚本具备有效语法", () => {
     const script = fileManagerHtmlPage().match(/<script>([\s\S]*)<\/script>/)?.[1];
 

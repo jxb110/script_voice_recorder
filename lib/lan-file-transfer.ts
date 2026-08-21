@@ -3,7 +3,8 @@ import * as Network from "expo-network";
 import { Platform } from "react-native";
 import type TcpSocket from "react-native-tcp-socket/lib/types/Socket";
 
-import { createSharedDirectory, deleteSharedEntry, listSharedDirectory, readSharedFileBase64, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess, saveSharedFile, saveSharedText, type SharedStorageEntry } from "@/lib/external-storage";
+import { createSharedDirectory, deleteSharedEntry, listSharedDirectory, readSharedDirectoryArchive, readSharedFileBase64, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess, saveSharedFile, saveSharedText, type SharedStorageEntry } from "@/lib/external-storage";
+import { zipSync } from "fflate";
 import { fileManagerHtmlPage } from "@/lib/lan-file-manager-page";
 import { persistTransferredScript } from "@/lib/recorder-files";
 import type { ScriptProject, Speaker } from "@/shared/recorder-types";
@@ -11,6 +12,7 @@ import type { ScriptProject, Speaker } from "@/shared/recorder-types";
 const PORT = 35678;
 const MAX_SCRIPT_SIZE = 3 * 1024 * 1024;
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_FOLDER_DOWNLOAD_SIZE = 40 * 1024 * 1024;
 const MAX_HTTP_REQUEST_SIZE = Math.ceil(MAX_FILE_SIZE * 1.4) + 64 * 1024;
 
 type ServerState = "stopped" | "starting" | "running" | "error";
@@ -148,6 +150,23 @@ async function routeRequest(request: HttpRequest): Promise<HttpResponse> {
       if (file.size > MAX_FILE_SIZE) throw new Error("单个文件超过 15 MB，请缩小文件后重试。");
       return json({ name: path.split("/").pop() ?? "download", base64: file.base64 });
     } catch (error) { return json({ error: error instanceof Error ? error.message : "无法读取文件。" }, 400); }
+  }
+  if (request.method === "GET" && request.path === "/api/fs/download-folder") {
+    try {
+      const path = request.query.get("path") ?? "";
+      const archive = await readSharedDirectoryArchive(path, MAX_FOLDER_DOWNLOAD_SIZE);
+      const contents: Record<string, Uint8Array> = {};
+      for (const file of archive.files) {
+        const raw = globalThis.atob(file.base64);
+        const bytes = new Uint8Array(raw.length);
+        for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+        contents[file.archivePath] = bytes;
+      }
+      const zipped = zipSync(contents, { level: 6 });
+      let binary = "";
+      for (let index = 0; index < zipped.length; index += 1) binary += String.fromCharCode(zipped[index]);
+      return json({ name: `${safeFileName(archive.archiveRoot)}.zip`, base64: globalThis.btoa(binary), size: archive.totalBytes });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法打包文件夹。" }, 400); }
   }
   if (request.method === "POST" && request.path === "/api/import-script") {
     try {

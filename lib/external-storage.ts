@@ -24,6 +24,12 @@ export type SharedStorageEntry = {
   modifiedAt?: number;
 };
 
+export type SharedStorageArchiveFile = {
+  archivePath: string;
+  base64: string;
+  size: number;
+};
+
 function getPermissionModule() {
   if (Platform.OS === "web") throw new Error("全目录文件管理仅支持重新构建后的 Android 应用。");
   const module = require("react-native-external-storage-permission") as { default?: AllFilesPermission; PermissionFile?: AllFilesPermission };
@@ -132,6 +138,35 @@ export async function readSharedFileBase64(relativePath: string) {
   const info = await nativeFs.stat(target);
   if (info.isDirectory()) throw new Error("文件不存在或不是可下载的文件。");
   return { base64: await nativeFs.readFile(target, "base64"), size: info.size };
+}
+
+export async function readSharedDirectoryArchive(relativePath: string, maximumBytes: number) {
+  const directory = normalizeRelativePath(relativePath);
+  if (!directory) throw new Error("请选择需要下载的目录。");
+  const nativeFs = getNativeFileSystem();
+  const info = await nativeFs.stat(sharedPath(directory, true));
+  if (!info.isDirectory()) throw new Error("目标不是目录。");
+  const archiveRoot = directory.split("/").pop() ?? "folder";
+  const files: SharedStorageArchiveFile[] = [];
+  let totalBytes = 0;
+
+  const visit = async (current: string, archivePrefix: string): Promise<void> => {
+    const children = await nativeFs.readDir(sharedPath(current, true));
+    for (const child of children) {
+      const childRelative = normalizeRelativePath(child.path.slice(sharedPath().length));
+      const archivePath = `${archivePrefix}/${child.name}`;
+      if (child.isDirectory()) {
+        await visit(childRelative, archivePath);
+        continue;
+      }
+      totalBytes += child.size;
+      if (totalBytes > maximumBytes) throw new Error(`文件夹内容超过 ${Math.floor(maximumBytes / 1024 / 1024)} MB，无法一次打包下载。请进入子目录分别下载。`);
+      files.push({ archivePath, base64: await nativeFs.readFile(child.path, "base64"), size: child.size });
+    }
+  };
+
+  await visit(directory, archiveRoot);
+  return { files, totalBytes, archiveRoot };
 }
 
 export async function copyPrivateFileToSharedStorage(sourceUri: string, relativePath: string) {
