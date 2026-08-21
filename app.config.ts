@@ -123,7 +123,7 @@ const config: ExpoConfig = {
   ],
   experiments: {
     typedRoutes: false,
-    reactCompiler: true,
+    reactCompiler: false,
   },
 };
 
