@@ -1,11 +1,11 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as DocumentPicker from "expo-document-picker";
-import { Directory, File } from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { useAppLanguage } from "@/lib/i18n";
 import { parseScriptContent, persistImportedScript, readImportedScript } from "@/lib/recorder-files";
 import { useRecorder } from "@/lib/recorder-context";
 import type { ScriptSentence } from "@/shared/recorder-types";
@@ -15,19 +15,18 @@ const TXT_SCRIPT_PATTERN = /\.txt$/i;
 
 export default function ReplaceScriptScreen() {
   const router = useRouter();
-  const { projectId } = useLocalSearchParams<{ projectId: string }>();
+  const { projectId, transferUri, transferName } = useLocalSearchParams<{ projectId: string; transferUri?: string; transferName?: string }>();
+  const { t } = useAppLanguage();
   const { projects, replaceProjectScript } = useRecorder();
   const project = projects.find((item) => item.id === projectId);
   const [fileName, setFileName] = useState("");
   const [fileUri, setFileUri] = useState("");
   const [sentences, setSentences] = useState<ScriptSentence[]>([]);
   const [importing, setImporting] = useState(false);
+  const processedTransferUri = useRef<string | null>(null);
   const recorded = project?.sentences.some((sentence) => sentence.recordingUri) ?? false;
 
-  if (!project) return <ScreenContainer className="items-center justify-center px-6"><Text style={styles.missing}>未找到该录音任务。</Text><TouchableOpacity onPress={() => router.replace("/" as never)}><Text style={styles.backText}>返回主页</Text></TouchableOpacity></ScreenContainer>;
-  if (recorded) return <ScreenContainer className="items-center justify-center px-6"><MaterialIcons color="#B7791F" name="lock-outline" size={44} /><Text style={styles.blockedTitle}>已有录音进度</Text><Text style={styles.blockedText}>为避免录音与文本错配，已有任意句录音的任务不能更换脚本。</Text><TouchableOpacity style={styles.returnButton} onPress={() => router.back()}><Text style={styles.returnText}>返回任务详情</Text></TouchableOpacity></ScreenContainer>;
-
-  const importAssets = async (assets: ScriptAsset[]) => {
+  async function importAssets(assets: ScriptAsset[]) {
     if (!assets.length) return;
     try {
       setImporting(true);
@@ -39,21 +38,16 @@ export default function ReplaceScriptScreen() {
       setSentences(merged);
     } catch (error) { Alert.alert("导入失败", error instanceof Error ? error.message : "无法读取所选 TXT 脚本。 "); }
     finally { setImporting(false); }
-  };
+  }
+
+  useEffect(() => { if (!transferUri || processedTransferUri.current === transferUri) return; processedTransferUri.current = transferUri; void importAssets([{ uri: transferUri, name: transferName || "transfer.txt" }]); }, [transferName, transferUri]);
+
+  if (!project) return <ScreenContainer className="items-center justify-center px-6"><Text style={styles.missing}>未找到该录音任务。</Text><TouchableOpacity onPress={() => router.replace("/" as never)}><Text style={styles.backText}>返回主页</Text></TouchableOpacity></ScreenContainer>;
+  if (recorded) return <ScreenContainer className="items-center justify-center px-6"><MaterialIcons color="#B7791F" name="lock-outline" size={44} /><Text style={styles.blockedTitle}>已有录音进度</Text><Text style={styles.blockedText}>为避免录音与文本错配，已有任意句录音的任务不能更换脚本。</Text><TouchableOpacity style={styles.returnButton} onPress={() => router.back()}><Text style={styles.returnText}>返回任务详情</Text></TouchableOpacity></ScreenContainer>;
 
   const pickFiles = async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: "text/plain", copyToCacheDirectory: true, multiple: true });
     if (!result.canceled) await importAssets(result.assets.filter((asset) => TXT_SCRIPT_PATTERN.test(asset.name)).map((asset) => ({ uri: asset.uri, name: asset.name })));
-  };
-
-  const pickDirectory = async () => {
-    if (Platform.OS === "web") { Alert.alert("请在 Android 设备上使用", "目录读取需要 Android 文件管理器授权；网页版可选择 TXT 文件。 "); return; }
-    try {
-      const directory = await Directory.pickDirectoryAsync();
-      const files = directory.list().filter((item): item is File => item instanceof File && TXT_SCRIPT_PATTERN.test(item.name));
-      if (!files.length) { Alert.alert("目录中没有 TXT 脚本", "请选择包含 TXT 脚本文件的目录。 "); return; }
-      await importAssets(files.map((file) => ({ uri: file.uri, name: file.name, content: file.textSync() })));
-    } catch (error) { Alert.alert("读取目录失败", error instanceof Error ? error.message : "无法读取该目录。 "); }
   };
 
   const confirm = () => {
@@ -61,7 +55,7 @@ export default function ReplaceScriptScreen() {
     Alert.alert("替换录音文本？", `将用 ${sentences.length} 句新文本替换当前尚未录制的脚本。`, [{ text: "取消", style: "cancel" }, { text: "确认替换", onPress: () => { try { replaceProjectScript(project.id, { sourceFileName: fileName, sourceFileUri: fileUri, sentences }); router.back(); } catch (error) { Alert.alert("无法替换", error instanceof Error ? error.message : "请重试。 "); } } }]);
   };
 
-  return <ScreenContainer className="px-5" edges={["top", "left", "right", "bottom"]}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}><View style={styles.header}><TouchableOpacity style={styles.back} onPress={() => router.back()}><MaterialIcons color="#2F4DA0" name="arrow-back" size={23} /></TouchableOpacity><Text style={styles.title}>更换录音文本</Text><View style={styles.back} /></View><View style={styles.notice}><MaterialIcons color="#2F4DA0" name="verified-user" size={20} /><Text style={styles.noticeText}>当前任务尚无录音进度，可以安全更换文本。TXT 的每一行必须是一条 JSON 字元数组。</Text></View><TouchableOpacity style={styles.importBox} onPress={pickFiles} disabled={importing}>{importing ? <ActivityIndicator color="#2F4DA0" /> : <><View style={styles.fileIcon}><MaterialIcons color="#2F4DA0" name="upload-file" size={27} /></View><View style={styles.importCopy}><Text style={styles.importTitle}>{fileName || "选择一个或多个 TXT 脚本"}</Text><Text style={styles.importHint}>{sentences.length ? `已解析 ${sentences.length} 句，点击重新选择` : "每行一个 JSON 字元数组"}</Text></View><MaterialIcons color="#9AA5BC" name="chevron-right" size={24} /></>}</TouchableOpacity><TouchableOpacity style={styles.directoryButton} onPress={pickDirectory} disabled={importing}><MaterialIcons color="#2F4DA0" name="folder-open" size={20} /><Text style={styles.directoryText}>从目录批量读取 TXT 脚本（Android）</Text></TouchableOpacity>{sentences.length > 0 && <View style={styles.preview}><Text style={styles.previewTitle}>新脚本预览</Text><Text style={styles.previewText}>{sentences.slice(0, 4).map((sentence) => `${sentence.index}. ${sentence.rawText}${sentence.prompt ? `（${sentence.prompt}）` : ""}`).join("\n")}</Text></View>}<TouchableOpacity style={[styles.confirm, !sentences.length && styles.confirmDisabled]} onPress={confirm} disabled={!sentences.length}><Text style={styles.confirmText}>确认更换文本</Text></TouchableOpacity></ScrollView></ScreenContainer>;
+  return <ScreenContainer className="px-5" edges={["top", "left", "right", "bottom"]}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}><View style={styles.header}><TouchableOpacity style={styles.back} onPress={() => router.back()}><MaterialIcons color="#2F4DA0" name="arrow-back" size={23} /></TouchableOpacity><Text style={styles.title}>更换录音文本</Text><View style={styles.back} /></View><View style={styles.notice}><MaterialIcons color="#2F4DA0" name="verified-user" size={20} /><Text style={styles.noticeText}>当前任务尚无录音进度，可以安全更换文本。TXT 的每一行必须是一条 JSON 字元数组。</Text></View><TouchableOpacity style={styles.importBox} onPress={pickFiles} disabled={importing}>{importing ? <ActivityIndicator color="#2F4DA0" /> : <><View style={styles.fileIcon}><MaterialIcons color="#2F4DA0" name="upload-file" size={27} /></View><View style={styles.importCopy}><Text style={styles.importTitle}>{fileName || "选择一个或多个 TXT 脚本"}</Text><Text style={styles.importHint}>{sentences.length ? `已解析 ${sentences.length} 句，点击重新选择` : "每行一个 JSON 字元数组"}</Text></View><MaterialIcons color="#9AA5BC" name="chevron-right" size={24} /></>}</TouchableOpacity><TouchableOpacity style={styles.directoryButton} onPress={() => router.push(`/file-transfer?projectId=${project.id}` as never)} disabled={importing}><MaterialIcons color="#2F4DA0" name="wifi" size={20} /><Text style={styles.directoryText}>{t("fileTransfer")}</Text></TouchableOpacity>{sentences.length > 0 && <View style={styles.preview}><Text style={styles.previewTitle}>新脚本预览</Text><Text style={styles.previewText}>{sentences.slice(0, 4).map((sentence) => `${sentence.index}. ${sentence.rawText}${sentence.prompt ? `（${sentence.prompt}）` : ""}`).join("\n")}</Text></View>}<TouchableOpacity style={[styles.confirm, !sentences.length && styles.confirmDisabled]} onPress={confirm} disabled={!sentences.length}><Text style={styles.confirmText}>确认更换文本</Text></TouchableOpacity></ScrollView></ScreenContainer>;
 }
 
 const styles = StyleSheet.create({

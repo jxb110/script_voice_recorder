@@ -11,7 +11,7 @@ describe("录制会话控制", () => {
 
   it("仅在所有句子均有录音时显示完成任务入口", () => {
     expect(isProjectRecordingComplete([])).toBe(false);
-    expect(isProjectRecordingComplete(["file://one.m4a", undefined])).toBe(false);
-    expect(isProjectRecordingComplete(["file://one.m4a", "file://two.m4a"])).toBe(true);
+    expect(isProjectRecordingComplete(["file://one.wav", undefined])).toBe(false);
+    expect(isProjectRecordingComplete(["file://one.wav", "file://two.wav"])).toBe(true);
   });
 });

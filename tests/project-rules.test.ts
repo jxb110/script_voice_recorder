@@ -11,7 +11,7 @@ describe("任务脚本更换保护规则", () => {
   });
 
   it("锁定已有录音进度的任务，防止录音与更换后的文本错配", () => {
-    const recordedProject = { sentences: [{ ...baseProject.sentences[0], recordingUri: "file:///recordings/001.m4a" }] };
+    const recordedProject = { sentences: [{ ...baseProject.sentences[0], recordingUri: "file:///recordings/001.wav" }] };
     expect(hasRecordingProgress(recordedProject.sentences)).toBe(true);
     expect(canReplaceProjectScript(recordedProject)).toBe(false);
   });

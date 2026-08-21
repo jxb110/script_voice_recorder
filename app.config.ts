@@ -65,7 +65,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["RECORD_AUDIO", "POST_NOTIFICATIONS"],
+    permissions: ["RECORD_AUDIO", "POST_NOTIFICATIONS", "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE"],
     intentFilters: [
       {
         action: "VIEW",
@@ -102,6 +102,16 @@ const config: ExpoConfig = {
       "expo-audio",
       {
         microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
+      },
+    ],
+    [
+      "react-native-audio-api",
+      {
+        iosBackgroundMode: false,
+        iosMicrophonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
+        androidPermissions: ["android.permission.RECORD_AUDIO"],
+        androidForegroundService: false,
+        disableFFmpeg: true,
       },
     ],
     [

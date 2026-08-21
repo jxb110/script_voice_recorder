@@ -62,6 +62,15 @@ export async function persistImportedScript(sourceUri: string, originalName: str
   return destination;
 }
 
+export async function persistTransferredScript(originalName: string, content: string) {
+  if (!originalName.toLowerCase().endsWith(".txt")) throw new Error("文件快传仅接收 TXT 脚本文件。");
+  parseScriptContent(content, originalName);
+  await ensureDirectory(SCRIPTS_DIRECTORY);
+  const destination = `${SCRIPTS_DIRECTORY}${Date.now()}_transfer_${cleanFileSegment(originalName)}`;
+  await FileSystem.writeAsStringAsync(destination, content, { encoding: FileSystem.EncodingType.UTF8 });
+  return destination;
+}
+
 export async function readImportedScript(uri: string) {
   if (Platform.OS === "web") return (await fetch(uri)).text();
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
@@ -79,7 +88,7 @@ export async function persistRecording(sourceUri: string, project: ScriptProject
   await ensureDirectory(folder);
   const paragraph = String(sentence.index).padStart(3, "0");
   const baseName = cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""));
-  const destination = `${folder}${baseName}_${cleanFileSegment(speaker.name)}_${paragraph}.m4a`;
+  const destination = `${folder}${baseName}_${cleanFileSegment(speaker.name)}_${paragraph}.wav`;
   if ((await FileSystem.getInfoAsync(destination)).exists) await FileSystem.deleteAsync(destination, { idempotent: true });
   await FileSystem.copyAsync({ from: sourceUri, to: destination });
   return destination;
@@ -92,7 +101,7 @@ export async function exportRecordingToPublicWaveDirectory(privateUri: string, p
   if (!permission.granted) throw new Error("未获得保存音频到手机公共目录的权限。录音已保留在应用内部目录。");
 
   await ensureDirectory(EXPORT_STAGING_DIRECTORY);
-  const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${Date.now()}.m4a`;
+  const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${Date.now()}.wav`;
   const stagingUri = `${EXPORT_STAGING_DIRECTORY}${exportName}`;
   const existing = await FileSystem.getInfoAsync(stagingUri);
   if (existing.exists) await FileSystem.deleteAsync(stagingUri, { idempotent: true });
@@ -133,7 +142,7 @@ export async function createRecordingArchive(project: ScriptProject, speaker: Sp
   for (const sentence of project.sentences) {
     if (!sentence.recordingUri || !(await FileSystem.getInfoAsync(sentence.recordingUri)).exists) continue;
     const audioBase64 = await FileSystem.readAsStringAsync(sentence.recordingUri, { encoding: FileSystem.EncodingType.Base64 });
-    entries[`${folderName}/${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${String(sentence.index).padStart(3, "0")}.m4a`] = base64ToBytes(audioBase64);
+    entries[`${folderName}/${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${String(sentence.index).padStart(3, "0")}.wav`] = base64ToBytes(audioBase64);
   }
   const archive = zipSync(entries, { level: 6 });
   const exportDirectory = `${ROOT_DIRECTORY}exports/`;
