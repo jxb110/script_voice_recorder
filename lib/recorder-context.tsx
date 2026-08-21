@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { deleteProjectLocalFiles, exportRecordingToPublicWaveDirectory, persistRecording } from "@/lib/recorder-files";
 import { canReplaceProjectScript } from "@/lib/project-rules";
+import { linkedProjectsForSpeaker } from "@/lib/speaker-rules";
 import { DEFAULT_RECORDER_SETTINGS, type RecorderSettings, type RecorderStore, type ScriptProject, type ScriptSentence, type Speaker } from "@/shared/recorder-types";
 
 const STORAGE_KEY = "script-voice-recorder.v1";
@@ -17,6 +18,7 @@ type RecorderContextValue = {
   settings: RecorderSettings;
   createSpeaker: (input: Omit<Speaker, "id" | "createdAt">) => Speaker;
   updateSpeaker: (speakerId: string, input: Omit<Speaker, "id" | "createdAt">) => void;
+  deleteSpeaker: (speakerId: string) => void;
   createProject: (input: NewProject) => ScriptProject;
   deleteProject: (projectId: string) => void;
   replaceProjectScript: (projectId: string, replacement: ScriptReplacement) => void;
@@ -58,6 +60,14 @@ export function RecorderProvider({ children }: PropsWithChildren) {
 
   const updateSpeaker = useCallback((speakerId: string, input: Omit<Speaker, "id" | "createdAt">) => {
     commit((current) => ({ ...current, speakers: current.speakers.map((speaker) => speaker.id === speakerId ? { ...speaker, ...input } : speaker) }));
+  }, [commit]);
+
+  const deleteSpeaker = useCallback((speakerId: string) => {
+    commit((current) => {
+      const linkedProjects = linkedProjectsForSpeaker(current.projects, speakerId);
+      if (linkedProjects.length) throw new Error(`该发音人仍关联 ${linkedProjects.length} 个录音任务，请先删除或更换这些任务。`);
+      return { ...current, speakers: current.speakers.filter((speaker) => speaker.id !== speakerId) };
+    });
   }, [commit]);
 
   const createProject = useCallback((input: NewProject) => {
@@ -106,7 +116,7 @@ export function RecorderProvider({ children }: PropsWithChildren) {
     return { recordingUri: persistedUri, publicUri, publicExportError };
   }, [commit, store.projects, store.speakers]);
 
-  const value = useMemo(() => ({ loaded, ...store, createSpeaker, updateSpeaker, createProject, deleteProject, replaceProjectScript, updateSettings, saveSentenceRecording }), [createProject, createSpeaker, deleteProject, loaded, replaceProjectScript, saveSentenceRecording, store, updateSettings, updateSpeaker]);
+  const value = useMemo(() => ({ loaded, ...store, createSpeaker, updateSpeaker, deleteSpeaker, createProject, deleteProject, replaceProjectScript, updateSettings, saveSentenceRecording }), [createProject, createSpeaker, deleteProject, deleteSpeaker, loaded, replaceProjectScript, saveSentenceRecording, store, updateSettings, updateSpeaker]);
   return <RecorderContext.Provider value={value}>{children}</RecorderContext.Provider>;
 }
 

@@ -11,9 +11,9 @@ type AudioWaveformProps = {
   height?: number;
 };
 
-const BAR_COUNT = 78;
+const BAR_COUNT = 112;
 
-export function AudioWaveform({ samples, progress = 0, recording = false, height = 112 }: AudioWaveformProps) {
+export function AudioWaveform({ samples, progress = 0, recording = false, height = 52 }: AudioWaveformProps) {
   const bars = useMemo(() => resampleWaveform(samples, BAR_COUNT), [samples]);
   const playedLimit = Math.round(Math.max(0, Math.min(1, progress)) * BAR_COUNT);
   const width = 360;
@@ -25,10 +25,10 @@ export function AudioWaveform({ samples, progress = 0, recording = false, height
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <Line x1="0" y1={center} x2={width} y2={center} stroke="#E1E5EE" strokeWidth="1" />
         {bars.map((sample, index) => {
-          const amplitude = 6 + sample * (height * 0.42);
+          const amplitude = 1.5 + sample * (height * 0.27);
           const x = index * step + step / 2;
           const color = recording ? "#D64646" : index < playedLimit ? "#2F4DA0" : "#AEB8CD";
-          return <Line key={index} x1={x} y1={center - amplitude} x2={x} y2={center + amplitude} stroke={color} strokeWidth={Math.max(1.5, step * 0.48)} strokeLinecap="round" />;
+          return <Line key={index} x1={x} y1={center - amplitude} x2={x} y2={center + amplitude} stroke={color} strokeWidth={Math.max(1, step * 0.34)} strokeLinecap="round" />;
         })}
         {!recording && progress > 0 ? <Line x1={Math.max(2, Math.min(width - 2, width * progress))} y1="8" x2={Math.max(2, Math.min(width - 2, width * progress))} y2={height - 8} stroke="#2F4DA0" strokeWidth="1.5" /> : null}
       </Svg>
@@ -37,6 +37,6 @@ export function AudioWaveform({ samples, progress = 0, recording = false, height
 }
 
 const styles = StyleSheet.create({
-  container: { alignSelf: "stretch", backgroundColor: "#F6F8FC", borderColor: "#E5EAF3", borderRadius: 16, borderWidth: 1, overflow: "hidden", paddingHorizontal: 9, paddingVertical: 7 },
-  recordingContainer: { backgroundColor: "#FFF6F6", borderColor: "#F3D1D5" },
+  container: { alignSelf: "stretch", backgroundColor: "#FFFFFF", borderColor: "#EDF0F5", borderRadius: 10, borderWidth: 1, overflow: "hidden", paddingHorizontal: 7, paddingVertical: 4 },
+  recordingContainer: { backgroundColor: "#FFFDFD", borderColor: "#F1DEE0" },
 });

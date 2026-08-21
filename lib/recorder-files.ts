@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 import type { ScriptProject, ScriptSentence, ScriptToken, Speaker } from "@/shared/recorder-types";
 
 const ROOT_DIRECTORY = FileSystem.documentDirectory ?? "";
+const EXPORT_STAGING_DIRECTORY = `${FileSystem.cacheDirectory ?? ROOT_DIRECTORY}record_jxb_exports/`;
 const SCRIPTS_DIRECTORY = `${ROOT_DIRECTORY}scripts/`;
 const RECORDINGS_DIRECTORY = `${ROOT_DIRECTORY}recordings/`;
 const createId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -68,6 +69,10 @@ export async function readImportedScript(uri: string) {
 
 const getSpeakerFolderName = (speaker: Speaker) => `${cleanFileSegment(speaker.name)}_${speaker.gender}_${speaker.age}岁`;
 
+export function getPublicAudioAlbumName(project: ScriptProject, speaker: Speaker) {
+  return `record_jxb/wave/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}`;
+}
+
 export async function persistRecording(sourceUri: string, project: ScriptProject, sentence: ScriptSentence, speaker: Speaker) {
   if (Platform.OS === "web") return sourceUri;
   const folder = `${RECORDINGS_DIRECTORY}${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}/`;
@@ -86,13 +91,22 @@ export async function exportRecordingToPublicWaveDirectory(privateUri: string, p
   if (!permission.granted) permission = await MediaLibrary.requestPermissionsAsync(true, ["audio"]);
   if (!permission.granted) throw new Error("未获得保存音频到手机公共目录的权限。录音已保留在应用内部目录。");
 
-  const albumName = `record_jxb/wave/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}`;
+  await ensureDirectory(EXPORT_STAGING_DIRECTORY);
+  const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${Date.now()}.m4a`;
+  const stagingUri = `${EXPORT_STAGING_DIRECTORY}${exportName}`;
+  const existing = await FileSystem.getInfoAsync(stagingUri);
+  if (existing.exists) await FileSystem.deleteAsync(stagingUri, { idempotent: true });
+  await FileSystem.copyAsync({ from: privateUri, to: stagingUri });
+  const stagedFile = await FileSystem.getInfoAsync(stagingUri);
+  if (!stagedFile.exists) throw new Error("无法创建导出音频副本。录音已保留在应用内部目录。");
+
+  const albumName = getPublicAudioAlbumName(project, speaker);
   const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
   if (existingAlbum) {
-    const asset = await MediaLibrary.createAssetAsync(privateUri, existingAlbum);
+    const asset = await MediaLibrary.createAssetAsync(stagingUri, existingAlbum);
     return asset.uri;
   }
-  const firstAsset = await MediaLibrary.createAssetAsync(privateUri);
+  const firstAsset = await MediaLibrary.createAssetAsync(stagingUri);
   const album = await MediaLibrary.createAlbumAsync(albumName, firstAsset, false);
   return album ? firstAsset.uri : undefined;
 }
