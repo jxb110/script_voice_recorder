@@ -14,7 +14,7 @@ import { useAppLanguage } from "@/lib/i18n";
 import { shouldAnimatePromptChange } from "@/lib/prompt-animation";
 import { clampReadingFontSize, READING_FONT_SIZE } from "@/lib/reading-font";
 import { useRecorder } from "@/lib/recorder-context";
-import { canContinueRecordingSession, isProjectRecordingComplete } from "@/lib/recording-session";
+import { canContinueRecordingSession, isLiveWaveformPhase, isProjectRecordingComplete } from "@/lib/recording-session";
 import { cancelWavRecording, startWavRecording, stopWavRecording } from "@/lib/wav-recorder";
 import { appendWaveformSample } from "@/lib/waveform-math";
 
@@ -34,6 +34,7 @@ export default function RecordingScreen() {
   const [readingFontSize, setReadingFontSize] = useState(settings.readingFontSize);
   const [isClosing, setIsClosing] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
+  const liveWaveformRef = useRef<number[]>([]);
   const closingRef = useRef(false);
   const lifecycleTokenRef = useRef(0);
   const pauseCancellerRef = useRef<(() => void) | null>(null);
@@ -87,6 +88,11 @@ export default function RecordingScreen() {
       void player.seekTo(0);
     } catch { /* the player may not be initialized while changing recording state */ }
   };
+  const appendLiveWaveformSample = (metering: number) => {
+    const next = appendWaveformSample(liveWaveformRef.current, metering);
+    liveWaveformRef.current = next;
+    setLiveWaveform(next);
+  };
 
   useEffect(() => { setCurrentIndex(Math.min(Math.max(0, Number(sentenceParam) || 0), Math.max(0, total - 1))); }, [sentenceParam, total]);
   useEffect(() => { setReadingFontSize(settings.readingFontSize); }, [settings.readingFontSize]);
@@ -131,14 +137,15 @@ export default function RecordingScreen() {
     const token = ++lifecycleTokenRef.current;
     try {
       stopPlayback();
+      liveWaveformRef.current = [];
       setLiveWaveform([]); setRecordingDurationMs(0); notify(Haptics.ImpactFeedbackStyle.Light); setPhase("leading");
-      if (!await waitForSilence(settings.leadingSilenceMs, token)) { if (!closingRef.current) setPhase("idle"); return; }
       await runRecorderOperation(async () => {
-        if (!isCancelled(token)) await startWavRecording(settings, (metering) => setLiveWaveform((current) => appendWaveformSample(current, metering)));
+        if (!isCancelled(token)) await startWavRecording(settings, appendLiveWaveformSample);
       });
       if (isCancelled(token)) { await stopRecorderSafely(); return; }
+      if (!await waitForSilence(settings.leadingSilenceMs, token)) { await stopRecorderSafely(); if (!closingRef.current) setPhase("idle"); return; }
       setPhase("recording"); notify(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (error) { if (!isCancelled(token)) { setPhase("idle"); Alert.alert("Unable to start recording", error instanceof Error ? error.message : "Check the microphone permission and device status."); } }
+    } catch (error) { await stopRecorderSafely(); if (!isCancelled(token)) { setPhase("idle"); Alert.alert("Unable to start recording", error instanceof Error ? error.message : "Check the microphone permission and device status."); } }
   };
   const finish = async () => {
     const token = lifecycleTokenRef.current;
@@ -147,7 +154,7 @@ export default function RecordingScreen() {
       const uri = await stopWavRecording();
       if (isCancelled(token)) return;
       if (!uri) throw new Error("Recording file was not created.");
-      setPhase("saving"); const result = await saveSentenceRecording(project.id, sentence.id, uri, liveWaveform); notify(Haptics.ImpactFeedbackStyle.Medium); setPhase("idle"); if (result.publicExportError) Alert.alert("录音已保存", result.publicExportError); setCurrentIndex((value) => Math.min(value + 1, total - 1));
+      setPhase("saving"); const result = await saveSentenceRecording(project.id, sentence.id, uri, liveWaveformRef.current); notify(Haptics.ImpactFeedbackStyle.Medium); setPhase("idle"); if (result.publicExportError) Alert.alert("录音已保存", result.publicExportError); setCurrentIndex((value) => Math.min(value + 1, total - 1));
     } catch (error) { if (!isCancelled(token)) { setPhase("idle"); Alert.alert("Unable to save recording", error instanceof Error ? error.message : "Try recording this sentence again."); } }
   };
   const togglePlay = async () => {
@@ -158,7 +165,8 @@ export default function RecordingScreen() {
   const jumpToSentence = (target: number) => { stopPlayback(); setCurrentIndex(target); setShowSentencePicker(false); };
   const finishTask = () => { stopPlayback(); router.replace(`/project/${project.id}` as never); };
   const statusCopy = phase === "leading" ? t("leadingSilence") : phase === "recording" ? t("recording") : phase === "trailing" ? t("trailingSilence") : phase === "saving" ? t("saving") : sentence.recordingUri ? t("recorded") : t("ready");
-  const waveform = phase === "recording" ? liveWaveform : sentence.waveform ?? [];
+  const waveformActive = isLiveWaveformPhase(phase);
+  const waveform = waveformActive ? liveWaveform : sentence.waveform ?? [];
   const promptRippleStyle = {
     opacity: promptWave.interpolate({ inputRange: [0, 0.12, 0.76, 1], outputRange: [0, 0.62, 0.38, 0] }),
     transform: [{ translateX: promptWave.interpolate({ inputRange: [0, 1], outputRange: [-140, 520] }) }],
@@ -188,12 +196,12 @@ export default function RecordingScreen() {
             <PhoneticText fontSize={readingFontSize} tokens={sentence.tokens} />
           </ScrollView>
         </View>
-        <View style={styles.waveformBlock}><View style={styles.waveformHeader}><Text style={styles.waveformTitle}>{phase === "recording" ? t("recording") : sentence.recordingUri ? t("play") : t("ready")}</Text>{sentence.recordingUri && phase !== "recording" ? <Text style={styles.waveformTime}>{formatSeconds(playerStatus.currentTime)} / {formatSeconds(playerStatus.duration)}</Text> : phase === "recording" ? <Text style={styles.waveformTime}>{formatSeconds(recordingDurationMs / 1000)}</Text> : null}</View><AudioWaveform samples={waveform} recording={phase === "recording"} progress={sentence.recordingUri && phase !== "recording" ? playbackProgress : 0} /></View>
+        <View style={styles.waveformBlock}><View style={styles.waveformHeader}><Text style={styles.waveformTitle}>{waveformActive ? statusCopy : sentence.recordingUri ? t("play") : t("ready")}</Text>{sentence.recordingUri && !waveformActive ? <Text style={styles.waveformTime}>{formatSeconds(playerStatus.currentTime)} / {formatSeconds(playerStatus.duration)}</Text> : phase === "recording" ? <Text style={styles.waveformTime}>{formatSeconds(recordingDurationMs / 1000)}</Text> : null}</View><AudioWaveform samples={waveform} recording={waveformActive} progress={sentence.recordingUri && !waveformActive ? playbackProgress : 0} /></View>
         <Text style={[styles.statusText, phase === "recording" && styles.statusRecording]}>{statusCopy}</Text>
         <View style={styles.bottomActionArea}>
           <View style={styles.bottomTools}><TouchableOpacity style={[styles.tool, !sentence.recordingUri && styles.toolDisabled]} onPress={togglePlay} disabled={!sentence.recordingUri || isBusy}><MaterialIcons color={sentence.recordingUri ? "#2F4DA0" : "#B9C2D5"} name={playerStatus.playing ? "pause" : "play-arrow"} size={23} /><Text style={[styles.toolText, !sentence.recordingUri && styles.toolTextDisabled]}>{playerStatus.playing ? t("pause") : t("play")}</Text></TouchableOpacity><TouchableOpacity style={styles.tool} onPress={() => { stopPlayback(); setCurrentIndex((value) => Math.max(0, value - 1)); }} disabled={isBusy || currentIndex === 0}><MaterialIcons color={currentIndex ? "#2F4DA0" : "#B9C2D5"} name="skip-previous" size={23} /><Text style={[styles.toolText, currentIndex === 0 && styles.toolTextDisabled]}>{t("previous")}</Text></TouchableOpacity><TouchableOpacity style={styles.tool} onPress={() => { stopPlayback(); setCurrentIndex((value) => Math.min(total - 1, value + 1)); }} disabled={isBusy || currentIndex === total - 1}><MaterialIcons color={currentIndex < total - 1 ? "#2F4DA0" : "#B9C2D5"} name="skip-next" size={23} /><Text style={[styles.toolText, currentIndex === total - 1 && styles.toolTextDisabled]}>{t("next")}</Text></TouchableOpacity></View>
           <TouchableOpacity accessibilityLabel={t("sentenceNumber")} accessibilityRole="button" disabled={isBusy} onPress={() => setShowSentencePicker(true)} style={[styles.sentencePickerButton, isBusy && styles.sentencePickerDisabled]}><View style={styles.sentencePickerIcon}><MaterialIcons color="#2F4DA0" name="format-list-numbered" size={20} /></View><View style={styles.sentencePickerCopy}><Text style={styles.sentencePickerLabel}>{t("sentenceNumber")}</Text><Text style={styles.sentencePickerValue}>#{String(currentIndex + 1).padStart(3, "0")} / {total}</Text></View><MaterialIcons color="#2F4DA0" name="expand-more" size={24} /></TouchableOpacity>
-          {phase === "idle" ? <View style={styles.idleActionRow}><TouchableOpacity style={[styles.recordButton, styles.inlineAction, sentence.recordingUri && styles.rerecordButton]} onPress={start}><MaterialIcons color="#FFFFFF" name="mic" size={23} /><Text style={styles.recordText}>{sentence.recordingUri ? t("replaySentence") : t("startRecording")}</Text></TouchableOpacity>{projectComplete ? <TouchableOpacity style={[styles.completeButton, styles.inlineAction]} onPress={finishTask}><MaterialIcons color="#FFFFFF" name="check-circle" size={22} /><Text style={styles.recordText}>{t("completeTask")}</Text></TouchableOpacity> : null}</View> : phase === "leading" ? <TouchableOpacity style={styles.cancelButton} onPress={() => { cancelPendingOperation(); setPhase("idle"); }}><Text style={styles.cancelText}>{t("cancelPreparation")}</Text></TouchableOpacity> : phase === "recording" ? <TouchableOpacity style={styles.stopButton} onPress={finish}><View style={styles.stopSquare} /><Text style={styles.recordText}>{t("stopRecording")}</Text></TouchableOpacity> : <View style={styles.workingButton}><ActivityIndicator color="#FFFFFF" /><Text style={styles.recordText}>{phase === "trailing" ? t("trailingSilence") : t("saving")}</Text></View>}
+          {phase === "idle" ? <View style={styles.idleActionRow}><TouchableOpacity style={[styles.recordButton, styles.inlineAction, sentence.recordingUri && styles.rerecordButton]} onPress={start}><MaterialIcons color="#FFFFFF" name="mic" size={23} /><Text style={styles.recordText}>{sentence.recordingUri ? t("replaySentence") : t("startRecording")}</Text></TouchableOpacity>{projectComplete ? <TouchableOpacity style={[styles.completeButton, styles.inlineAction]} onPress={finishTask}><MaterialIcons color="#FFFFFF" name="check-circle" size={22} /><Text style={styles.recordText}>{t("completeTask")}</Text></TouchableOpacity> : null}</View> : phase === "leading" ? <TouchableOpacity style={styles.cancelButton} onPress={() => { cancelPendingOperation(); void stopRecorderSafely(); setPhase("idle"); }}><Text style={styles.cancelText}>{t("cancelPreparation")}</Text></TouchableOpacity> : phase === "recording" ? <TouchableOpacity style={styles.stopButton} onPress={finish}><View style={styles.stopSquare} /><Text style={styles.recordText}>{t("stopRecording")}</Text></TouchableOpacity> : <View style={styles.workingButton}><ActivityIndicator color="#FFFFFF" /><Text style={styles.recordText}>{phase === "trailing" ? t("trailingSilence") : t("saving")}</Text></View>}
         </View>
         <Modal animationType="slide" transparent visible={showSentencePicker} onRequestClose={() => setShowSentencePicker(false)}>
           <View style={styles.sentenceModalOverlay}>
