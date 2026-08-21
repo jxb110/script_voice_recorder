@@ -41,3 +41,5 @@
 - [x] 对齐 Expo SDK 54 所需的 document-picker、file-system、sharing 与 asset 原生依赖版本
 - [x] 消除 expo-file-system 重复原生模块并重新运行 Expo 依赖诊断
 - [x] 完成 expo-asset 安装并复核 Expo SDK 54 原生依赖锁定结果
+- [x] 修复 Reanimated 强制要求启用新架构导致的 Android Gradle 构建失败
+- [x] 验证新架构 Expo 配置与 APK 发布前检查
