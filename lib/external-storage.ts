@@ -5,10 +5,12 @@ export const SHARED_STORAGE_DISPLAY_ROOT = "/storage/emulated/0";
 
 type AllFilesPermission = { checkAndGrantPermission: () => Promise<boolean> };
 type NativeFileSystem = {
+  CachesDirectoryPath: string;
   ExternalStorageDirectoryPath: string;
   copyFile: (from: string, to: string) => Promise<void>;
   exists: (path: string) => Promise<boolean>;
   mkdir: (path: string) => Promise<void>;
+  read: (path: string, length?: number, position?: number, encoding?: "base64") => Promise<string>;
   readDir: (path: string) => Promise<Array<{ name: string; path: string; size: number; mtime?: Date; isDirectory: () => boolean }>>;
   readFile: (path: string, encoding: "base64") => Promise<string>;
   stat: (path: string) => Promise<{ isDirectory: () => boolean; size: number }>;
@@ -28,6 +30,11 @@ export type SharedStorageArchiveFile = {
   archivePath: string;
   base64: string;
   size: number;
+};
+
+export type TemporaryArchive = {
+  path: string;
+  name: string;
 };
 
 function getPermissionModule() {
@@ -167,6 +174,29 @@ export async function readSharedDirectoryArchive(relativePath: string, maximumBy
 
   await visit(directory, archiveRoot);
   return { files, totalBytes, archiveRoot };
+}
+
+export async function createTemporaryArchive(name: string): Promise<TemporaryArchive> {
+  const nativeFs = getNativeFileSystem();
+  const directory = `${nativeFs.CachesDirectoryPath}/file-transfer`;
+  await nativeFs.mkdir(directory);
+  const safeName = childName(name).replace(/\.zip$/i, "") || "folder";
+  return { path: `${directory}/${Date.now()}_${safeName}.zip`, name: `${safeName}.zip` };
+}
+
+export async function getNativeFileSize(path: string) {
+  const info = await getNativeFileSystem().stat(path);
+  if (info.isDirectory()) throw new Error("临时压缩文件无效。");
+  return info.size;
+}
+
+export async function readNativeFileChunkBase64(path: string, position: number, length: number) {
+  return getNativeFileSystem().read(path, length, position, "base64");
+}
+
+export async function deleteNativeFile(path: string) {
+  const nativeFs = getNativeFileSystem();
+  if (await nativeFs.exists(path)) await nativeFs.unlink(path);
 }
 
 export async function copyPrivateFileToSharedStorage(sourceUri: string, relativePath: string) {

@@ -185,6 +185,9 @@ importers:
       react-native-worklets:
         specifier: 0.5.1
         version: 0.5.1(@babel/core@7.28.5)(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      react-native-zip-archive:
+        specifier: ^9.4.0
+        version: 9.4.0(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       superjson:
         specifier: ^1.13.3
         version: 1.13.3
@@ -5261,6 +5264,12 @@ packages:
       '@babel/core': ^7.0.0-0
       react: '*'
       react-native: '*'
+
+  react-native-zip-archive@9.4.0:
+    resolution: {integrity: sha512-uz5/OyjUmgyKtwvFXp+tLNlO66GyncFWTerbIXZr8vZQDsw7WllxJNu65CBWTBstjmp8B1hF/3RpKj3/IFO3/A==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-native: '>=0.70.0'
 
   react-native@0.81.5:
     resolution: {integrity: sha512-1w+/oSjEXZjMqsIvmkCRsOc8UBYv163bTWKTI8+1mxztvQPhCRYGTvZ/PL1w16xXHneIj/SLGfxWg2GWN2uexw==}
@@ -11642,6 +11651,11 @@ snapshots:
       semver: 7.7.2
     transitivePeerDependencies:
       - supports-color
+
+  react-native-zip-archive@9.4.0(react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
 
   react-native@0.81.5(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0):
     dependencies:

@@ -21,6 +21,8 @@ describe("局域网文件管理页面", () => {
     expect(page).toContain("已完成 '+succeeded+'/'+files.length+' 个文件上传。");
     expect(page).toContain("data-download-folder");
     expect(page).toContain("/api/fs/download-folder?path=");
+    expect(page).toContain("&token='+encodeURIComponent(token)");
+    expect(page).not.toContain("requestJson('/api/fs/download-folder");
     expect(page).not.toContain("导入录音脚本");
   });
 

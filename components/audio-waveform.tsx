@@ -11,7 +11,7 @@ type AudioWaveformProps = {
   height?: number;
 };
 
-const BAR_COUNT = 72;
+const BAR_COUNT = 68;
 
 export function AudioWaveform({ samples, progress = 0, recording = false, height = 58 }: AudioWaveformProps) {
   const bars = useMemo(() => resampleWaveform(samples, BAR_COUNT), [samples]);
@@ -19,7 +19,7 @@ export function AudioWaveform({ samples, progress = 0, recording = false, height
   const width = 360;
   const center = height / 2;
   const step = width / BAR_COUNT;
-  const barWidth = Math.max(1.7, Math.min(3.8, step * 0.54));
+  const barWidth = Math.max(1.5, Math.min(2.8, step * 0.38));
   const clipId = recording ? "recording-wave-clip" : "playback-wave-clip";
 
   return (
@@ -34,7 +34,8 @@ export function AudioWaveform({ samples, progress = 0, recording = false, height
             const halfHeight = waveformBarHalfHeight(sample, height);
             const x = index * step + (step - barWidth) / 2;
             const color = kind === "silence" ? recording ? "#E9BFC7" : "#D5DDEA" : recording ? "#E14A5A" : index < playedLimit ? "#3158B8" : "#8796B3";
-            return <Rect key={index} x={x} y={center - halfHeight} width={barWidth} height={halfHeight * 2} rx={barWidth / 2} fill={color} opacity={kind === "silence" ? 0.78 : 1} />;
+            const opacity = kind === "silence" ? 0.72 : Math.min(1, 0.72 + sample * 0.28);
+            return <Rect key={index} x={x} y={center - halfHeight} width={barWidth} height={halfHeight * 2} rx={barWidth / 2} fill={color} stroke={kind === "silence" ? "transparent" : recording ? "#B93445" : index < playedLimit ? "#1E438F" : "#657796"} strokeWidth={0.28} opacity={opacity} />;
           })}
           {recording ? <Rect x={width - 3} y="8" width="2" height={height - 16} rx="1" fill="#E14A5A" opacity="0.9" /> : null}
           {!recording && progress > 0 ? <Line x1={Math.max(4, Math.min(width - 4, width * progress))} y1="7" x2={Math.max(4, Math.min(width - 4, width * progress))} y2={height - 7} stroke="#3158B8" strokeWidth="1.5" /> : null}

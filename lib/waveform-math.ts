@@ -17,15 +17,15 @@ export function classifyWaveformSample(sample: number): WaveformSegmentKind {
 export function waveformDisplayStrength(sample: number) {
   if (classifyWaveformSample(sample) === "silence") return 0;
   const activeRange = (sample - WAVEFORM_SILENCE_THRESHOLD) / (1 - WAVEFORM_SILENCE_THRESHOLD);
-  return Math.pow(Math.min(1, Math.max(0, activeRange)), 0.58);
+  return Math.pow(Math.min(1, Math.max(0, activeRange)), 0.82);
 }
 
 /** Returns a symmetric half-bar height that always remains inside the waveform drawing bounds. */
 export function waveformBarHalfHeight(sample: number, totalHeight: number, edgeInset = 5) {
   const safeHalfHeight = Math.max(1, totalHeight / 2 - Math.max(0, edgeInset));
   if (classifyWaveformSample(sample) === "silence") return Math.min(safeHalfHeight, 1.2);
-  const rawHeight = 2.6 + waveformDisplayStrength(sample) * safeHalfHeight * 0.94;
-  return Math.min(safeHalfHeight, Math.max(1.7, rawHeight));
+  const rawHeight = 2.4 + waveformDisplayStrength(sample) * safeHalfHeight * 0.92;
+  return Math.min(safeHalfHeight, Math.max(1.6, rawHeight));
 }
 
 export function appendWaveformSample(samples: number[], level?: number, maximum = MAX_WAVEFORM_SAMPLES) {
@@ -46,6 +46,9 @@ export function resampleWaveform(samples: number[], count: number): number[] {
   return Array.from({ length: count }, (_, index) => {
     const start = Math.floor((index / count) * samples.length);
     const end = Math.max(start + 1, Math.floor(((index + 1) / count) * samples.length));
-    return Math.max(MINIMUM_SAMPLE, ...samples.slice(start, end));
+    const window = samples.slice(start, end);
+    const peak = Math.max(MINIMUM_SAMPLE, ...window);
+    const average = window.reduce((sum, value) => sum + value, 0) / window.length;
+    return Math.max(MINIMUM_SAMPLE, Math.min(1, average * 0.2 + peak * 0.8));
   });
 }
