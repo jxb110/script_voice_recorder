@@ -1,5 +1,5 @@
 export const READING_FONT_SIZE = {
-  defaultValue: 29,
+  defaultValue: 20,
   maximumValue: 42,
   minimumValue: 20,
   step: 1,
