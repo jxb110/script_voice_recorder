@@ -19,6 +19,8 @@ describe("局域网文件管理页面", () => {
     const page = fileManagerHtmlPage();
 
     expect(page).toContain("Array.prototype.slice.call(files)");
+    expect(page).toContain("drop-zone");
+    expect(page).toContain("event.dataTransfer&&event.dataTransfer.files");
     expect(page).toContain("已完成 '+succeeded+'/'+selected.length+' 个文件上传。");
     expect(page).toContain("data-download-folder");
     expect(page).toContain("/api/fs/download-folder?path=");

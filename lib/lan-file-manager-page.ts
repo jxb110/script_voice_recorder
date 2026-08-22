@@ -5,7 +5,7 @@ export function fileManagerHtmlPage() {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>采音脚本 · 文件管理</title>
   <style>
-    :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#1b2438;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:920px;margin:auto;padding:28px 18px}h1{font-size:27px;margin:0}.sub{color:#65708a;line-height:1.65;margin:7px 0 0}.card{background:#fff;border:1px solid #e1e7f0;border-radius:16px;margin-top:16px;overflow:hidden}.toolbar{align-items:center;background:#f8faff;border-bottom:1px solid #e8edf5;display:flex;flex-wrap:wrap;gap:9px;padding:12px}.path{color:#355394;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;min-width:190px;overflow-wrap:anywhere}.btn{border:0;background:#2f4da0;color:#fff;border-radius:9px;cursor:pointer;font-weight:700;padding:9px 12px}.btn.alt{background:#edf2ff;color:#2f4da0}.file-list{min-height:180px}.row{align-items:center;border-top:1px solid #eef1f6;display:flex;gap:11px;padding:11px 14px}.row:first-child{border-top:0}.row .icon{color:#2f4da0}.row .name{cursor:pointer;flex:1;font-weight:700;overflow-wrap:anywhere}.row .meta{color:#7b879e;font-size:12px}.actions{display:flex;gap:7px}.small{border:0;border-radius:8px;cursor:pointer;font-weight:700;padding:7px 9px}.download{background:#e8f7ef;color:#18754f}.delete{background:#fff0f1;color:#bd4050}.empty{color:#71809b;padding:28px;text-align:center}.drop{border:2px dashed #9eb4e8;border-radius:13px;margin:14px;padding:22px;text-align:center;background:#f7f9ff}.muted{color:#65708a}.notice{align-items:flex-start;background:#fff8e8;border-radius:13px;color:#705c2b;display:flex;gap:8px;margin-top:14px;padding:13px}.tag{background:#e8f7ef;border-radius:999px;color:#19764f;font-size:12px;font-weight:800;padding:4px 9px}input[type=file]{display:none}#message{color:#2f4da0;min-height:20px;margin:12px 14px 14px}@media(max-width:560px){.wrap{padding:18px 12px}.actions{flex-wrap:wrap}.row{align-items:flex-start}.toolbar{align-items:stretch}.path{min-width:100%}}
+    :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#1b2438;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:920px;margin:auto;padding:28px 18px}h1{font-size:27px;margin:0}.sub{color:#65708a;line-height:1.65;margin:7px 0 0}.card{background:#fff;border:1px solid #e1e7f0;border-radius:16px;margin-top:16px;overflow:hidden}.toolbar{align-items:center;background:#f8faff;border-bottom:1px solid #e8edf5;display:flex;flex-wrap:wrap;gap:9px;padding:12px;transition:background .15s,border .15s}.toolbar.dragging{background:#e7efff;box-shadow:inset 0 0 0 2px #2f4da0}.drop-hint{color:#66799c;font-size:12px;font-weight:700;order:5;width:100%}.path{color:#355394;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;min-width:190px;overflow-wrap:anywhere}.btn{border:0;background:#2f4da0;color:#fff;border-radius:9px;cursor:pointer;font-weight:700;padding:9px 12px}.btn.alt{background:#edf2ff;color:#2f4da0}.file-list{min-height:180px}.row{align-items:center;border-top:1px solid #eef1f6;display:flex;gap:11px;padding:11px 14px}.row:first-child{border-top:0}.row .icon{color:#2f4da0}.row .name{cursor:pointer;flex:1;font-weight:700;overflow-wrap:anywhere}.row .meta{color:#7b879e;font-size:12px}.actions{display:flex;gap:7px}.small{border:0;border-radius:8px;cursor:pointer;font-weight:700;padding:7px 9px}.download{background:#e8f7ef;color:#18754f}.delete{background:#fff0f1;color:#bd4050}.empty{color:#71809b;padding:28px;text-align:center}.muted{color:#65708a}.notice{align-items:flex-start;background:#fff8e8;border-radius:13px;color:#705c2b;display:flex;gap:8px;margin-top:14px;padding:13px}.tag{background:#e8f7ef;border-radius:999px;color:#19764f;font-size:12px;font-weight:800;padding:4px 9px}input[type=file]{display:none}#message{color:#2f4da0;min-height:20px;margin:12px 14px 14px}@media(max-width:560px){.wrap{padding:18px 12px}.actions{flex-wrap:wrap}.row{align-items:flex-start}.toolbar{align-items:stretch}.path{min-width:100%}}
   </style>
 </head>
 <body>
@@ -14,11 +14,11 @@ export function fileManagerHtmlPage() {
     <p class="sub">默认打开录音导出目录 <span class="tag">record_jxb/wave</span>。本页仅在同一 Wi‑Fi 下可用，并且仅在手机应用保持前台时有效。</p>
     <div class="notice">地址包含完整读写权限。请仅发送给可信设备；不要在公共网络使用。</div>
     <section class="card">
-      <div class="toolbar">
+      <div id="drop-zone" class="toolbar">
         <button id="up" class="btn alt">上级目录</button>
         <span id="path" class="path">正在读取目录…</span>
         <button id="mkdir" class="btn alt">新建目录</button>
-        <label class="btn" for="files">上传文件</label><input id="files" type="file" multiple>
+        <label class="btn" for="files">上传文件</label><input id="files" type="file" multiple><span class="drop-hint">可将多个文件直接拖入此区域上传</span>
       </div>
       <div id="list" class="file-list"></div><div id="message"></div>
     </section>
@@ -31,6 +31,7 @@ export function fileManagerHtmlPage() {
     var pathLabel=document.getElementById('path');
     var message=document.getElementById('message');
     var filesInput=document.getElementById('files');
+    var dropZone=document.getElementById('drop-zone');
     function esc(value){return String(value).replace(/[&<>"']/g,function(char){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]})}
     function api(path,options){var glue=path.indexOf('?')>-1?'&':'?';return fetch(path+glue+'token='+encodeURIComponent(token),options)}
     function sizeText(value){return value<1024?value+' B':value<1048576?(value/1024).toFixed(1)+' KB':(value/1048576).toFixed(1)+' MB'}
@@ -64,6 +65,11 @@ export function fileManagerHtmlPage() {
     document.getElementById('mkdir').addEventListener('click',createFolder);
     list.addEventListener('click',function(event){var target=event.target.closest('[data-open],[data-download],[data-download-folder],[data-delete]');if(!target)return;var path=encodedPath(target);if(target.hasAttribute('data-open')){current=path;refresh()}else if(target.hasAttribute('data-download')){downloadEntry(path)}else if(target.hasAttribute('data-download-folder')){downloadFolder(path)}else{removeEntry(path)}});
     filesInput.addEventListener('change',function(){if(filesInput.files)upload(filesInput.files);filesInput.value=''});
+    ['dragenter','dragover'].forEach(function(eventName){dropZone.addEventListener(eventName,function(event){event.preventDefault();dropZone.classList.add('dragging')})});
+    ['dragleave','drop'].forEach(function(eventName){dropZone.addEventListener(eventName,function(event){event.preventDefault();dropZone.classList.remove('dragging')})});
+    dropZone.addEventListener('drop',function(event){var files=event.dataTransfer&&event.dataTransfer.files;if(files&&files.length)upload(files)});
+    document.addEventListener('dragover',function(event){event.preventDefault()});
+    document.addEventListener('drop',function(event){event.preventDefault()});
     window.onerror=function(_message,_source,_line,_column,error){showError(error||Error('页面脚本异常'))};
     refresh();
   }());
