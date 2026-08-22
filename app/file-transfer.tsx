@@ -1,10 +1,10 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { getLanFileTransferStatus, startLanFileTransfer, stopLanFileTransfer, updateLanFileTransferData, type LanTransferStatus, type TransferredScript } from "@/lib/lan-file-transfer";
+import { getLanFileTransferStatus, startLanFileTransfer, stopLanFileTransfer, updateLanFileTransferData, type LanTransferStatus } from "@/lib/lan-file-transfer";
 import { useAppLanguage } from "@/lib/i18n";
 import { useRecorder } from "@/lib/recorder-context";
 
@@ -12,16 +12,15 @@ const EMPTY_STATUS = getLanFileTransferStatus();
 
 export default function FileTransferScreen() {
   const router = useRouter();
-  const { projectId } = useLocalSearchParams<{ projectId?: string }>();
   const { projects, speakers } = useRecorder();
   const { language, t } = useAppLanguage();
   const [status, setStatus] = useState<LanTransferStatus>(() => getLanFileTransferStatus());
   const [starting, setStarting] = useState(false);
   const didAutoStart = useRef(false);
   const copy = language === "zh" ? {
-    running: "局域网文件管理已开启", ready: "准备开启文件管理", opening: "正在请求文件权限并确认端口监听…", address: "在同一 Wi-Fi 的设备浏览器中打开", token: "读写口令", directory: "默认录音目录", notice: "浏览器可从默认录音目录进入手机共享存储并管理文件。首次使用请在系统设置中允许“管理所有文件”；受保护的 Android/data 等目录仍不可访问。地址含有读写口令，请勿发送给不受信任的人。", received: "已接收脚本", receivedHint: "在浏览器上传 TXT 后，选择一个脚本继续。", use: "使用", empty: "暂未接收 TXT 脚本。请在其他设备浏览器打开上方地址上传。", stop: "停止文件管理", startFailed: "无法启动文件管理。", errorTitle: "文件管理未开始监听", retry: "重新监听端口",
+    running: "局域网文件管理已开启", ready: "准备开启文件管理", opening: "正在请求文件权限并确认端口监听…", address: "在同一 Wi-Fi 的设备浏览器中打开", token: "读写口令", directory: "默认录音目录", notice: "浏览器可从默认录音目录进入手机共享存储并管理文件。首次使用请在系统设置中允许“管理所有文件”；受保护的 Android/data 等目录仍不可访问。地址含有读写口令，请勿发送给不受信任的人。", stop: "停止文件管理", startFailed: "无法启动文件管理。", errorTitle: "文件管理未开始监听", retry: "重新监听端口",
   } : {
-    running: "Local file manager is running", ready: "Ready to start file manager", opening: "Requesting file access and confirming the listening port…", address: "Open this in a browser on the same Wi-Fi", token: "Read/write token", directory: "Default recordings directory", notice: "From the recordings directory, the browser can browse and manage shared storage. On first use, allow “manage all files” in Android Settings; protected paths such as Android/data remain unavailable. The address includes a read/write token; do not share it with untrusted devices.", received: "Received scripts", receivedHint: "After uploading TXT in the browser, choose a script to continue.", use: "Use", empty: "No TXT script received yet. Open the address above in another device browser to upload.", stop: "Stop file manager", startFailed: "Unable to start file manager.", errorTitle: "File manager is not listening", retry: "Retry port",
+    running: "Local file manager is running", ready: "Ready to start file manager", opening: "Requesting file access and confirming the listening port…", address: "Open this in a browser on the same Wi-Fi", token: "Read/write token", directory: "Default recordings directory", notice: "From the recordings directory, the browser can browse and manage shared storage. On first use, allow “manage all files” in Android Settings; protected paths such as Android/data remain unavailable. The address includes a read/write token; do not share it with untrusted devices.", stop: "Stop file manager", startFailed: "Unable to start file manager.", errorTitle: "File manager is not listening", retry: "Retry port",
   };
 
   const refresh = useCallback(() => setStatus(getLanFileTransferStatus()), []);
@@ -31,11 +30,6 @@ export default function FileTransferScreen() {
     finally { setStarting(false); }
   }, [copy.startFailed, projects, speakers, t]);
   const stop = () => { stopLanFileTransfer(); setStatus(EMPTY_STATUS); };
-  const selectScript = (script: TransferredScript) => {
-    const query = `transferUri=${encodeURIComponent(script.uri)}&transferName=${encodeURIComponent(script.name)}`;
-    router.replace((projectId ? `/replace-script/${projectId}?${query}` : `/new-project?${query}`) as never);
-  };
-
   useEffect(() => { updateLanFileTransferData(projects, speakers); }, [projects, speakers]);
   useEffect(() => { if (!didAutoStart.current) { didAutoStart.current = true; void start(); } }, [start]);
   useEffect(() => { const interval = setInterval(refresh, 1100); return () => clearInterval(interval); }, [refresh]);
@@ -48,8 +42,6 @@ export default function FileTransferScreen() {
         {starting || status.starting ? <View style={styles.loading}><ActivityIndicator color="#2F4DA0" /><Text style={styles.loadingText}>{copy.opening}</Text></View> : status.running ? <>
           <View style={styles.addressCard}><Text style={styles.cardLabel}>{copy.address}</Text><Text selectable style={styles.address}>{status.address}/?token={status.token}</Text><View style={styles.tokenRow}><MaterialIcons color="#1E8B61" name="verified-user" size={18} /><Text style={styles.tokenText}>{copy.token}: {status.token} · {status.port}</Text></View><View style={styles.directoryRow}><MaterialIcons color="#2F4DA0" name="folder" size={17} /><View style={styles.directoryCopy}><Text style={styles.directoryLabel}>{copy.directory}</Text><Text selectable style={styles.directoryPath}>/storage/emulated/0/{status.defaultDirectory}</Text></View></View></View>
           <View style={styles.notice}><MaterialIcons color="#2F4DA0" name="info-outline" size={20} /><Text style={styles.noticeText}>{copy.notice}</Text></View>
-          <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>{copy.received}</Text><Text style={styles.sectionHint}>{copy.receivedHint}</Text></View><View style={styles.count}><Text style={styles.countText}>{status.scripts.length}</Text></View></View>
-          {status.scripts.length ? <View style={styles.scriptList}>{status.scripts.map((script) => <View key={script.id} style={styles.script}><View style={styles.scriptIcon}><MaterialIcons color="#2F4DA0" name="description" size={22} /></View><View style={styles.scriptCopy}><Text numberOfLines={1} style={styles.scriptName}>{script.name}</Text><Text style={styles.scriptMeta}>{t("transferredScript")}</Text></View><TouchableOpacity style={styles.useButton} onPress={() => selectScript(script)}><Text style={styles.useText}>{copy.use}</Text></TouchableOpacity></View>)}</View> : <View style={styles.empty}><MaterialIcons color="#9AA5BC" name="upload-file" size={28} /><Text style={styles.emptyText}>{copy.empty}</Text></View>}
           <TouchableOpacity style={styles.stopButton} onPress={stop}><MaterialIcons color="#C34F5A" name="stop-circle" size={20} /><Text style={styles.stopText}>{copy.stop}</Text></TouchableOpacity>
         </> : <>{status.error ? <View style={styles.errorCard}><MaterialIcons color="#C34F5A" name="error-outline" size={22} /><View style={styles.errorCopy}><Text style={styles.errorTitle}>{copy.errorTitle}</Text><Text style={styles.errorText}>{status.error}</Text></View></View> : null}<TouchableOpacity style={styles.startButton} onPress={start}><MaterialIcons color="#FFFFFF" name="wifi" size={21} /><Text style={styles.startText}>{status.error ? copy.retry : t("openFileTransfer")}</Text></TouchableOpacity></>}
       </ScrollView>

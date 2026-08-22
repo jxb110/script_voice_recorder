@@ -18,7 +18,8 @@ describe("局域网文件管理页面", () => {
   it("仅保留批量上传入口，并为目录提供递归下载操作", () => {
     const page = fileManagerHtmlPage();
 
-    expect(page).toContain("已完成 '+succeeded+'/'+files.length+' 个文件上传。");
+    expect(page).toContain("Array.prototype.slice.call(files)");
+    expect(page).toContain("已完成 '+succeeded+'/'+selected.length+' 个文件上传。");
     expect(page).toContain("data-download-folder");
     expect(page).toContain("/api/fs/download-folder?path=");
     expect(page).toContain("&token='+encodeURIComponent(token)");
