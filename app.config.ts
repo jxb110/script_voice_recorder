@@ -32,7 +32,7 @@ const env = {
   appSlug: "script_voice_recorder",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "/manus-storage/script-voice-recorder-ai-icon_95dc6f81.png",
+  logoUrl: "/manus-storage/script-voice-recorder-flat-ai-icon_a84c170f.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
