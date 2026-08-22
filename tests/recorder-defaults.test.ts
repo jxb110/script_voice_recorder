@@ -13,5 +13,6 @@ describe("录音默认设置", () => {
     expect(DEFAULT_RECORDER_SETTINGS.trailingSilenceMs).toBe(500);
     expect(DEFAULT_RECORDER_SETTINGS.bitDepth).toBe(16);
     expect(DEFAULT_RECORDER_SETTINGS.channels).toBe(1);
+    expect(DEFAULT_RECORDER_SETTINGS.sampleRate).toBe(48000);
   });
 });

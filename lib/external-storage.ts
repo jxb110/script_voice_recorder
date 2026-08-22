@@ -7,6 +7,7 @@ type AllFilesPermission = { checkAndGrantPermission: () => Promise<boolean> };
 type NativeFileSystem = {
   CachesDirectoryPath: string;
   ExternalStorageDirectoryPath: string;
+  appendFile: (path: string, content: string, encoding: "base64" | "utf8") => Promise<void>;
   copyFile: (from: string, to: string) => Promise<void>;
   exists: (path: string) => Promise<boolean>;
   mkdir: (path: string) => Promise<void>;
@@ -35,6 +36,11 @@ export type SharedStorageArchiveFile = {
 export type TemporaryArchive = {
   path: string;
   name: string;
+};
+
+export type SharedUploadTarget = {
+  relativePath: string;
+  nativePath: string;
 };
 
 function getPermissionModule() {
@@ -117,6 +123,20 @@ export async function saveSharedFile(parentPath: string, name: string, base64: s
   await nativeFs.mkdir(sharedPath(parent, true));
   await nativeFs.writeFile(sharedPath(relative), base64, "base64");
   return relative;
+}
+
+export async function createSharedUploadTarget(parentPath: string, name: string): Promise<SharedUploadTarget> {
+  const parent = normalizeRelativePath(parentPath);
+  const relativePath = parent ? `${parent}/${childName(name)}` : childName(name);
+  const nativeFs = getNativeFileSystem();
+  const targetPath = sharedPath(relativePath);
+  await nativeFs.mkdir(sharedPath(parent, true));
+  await nativeFs.writeFile(targetPath, "", "utf8");
+  return { relativePath, nativePath: targetPath };
+}
+
+export async function appendSharedUploadChunk(nativePath: string, base64: string) {
+  await getNativeFileSystem().appendFile(nativePath, base64, "base64");
 }
 
 export async function saveSharedText(parentPath: string, name: string, content: string) {

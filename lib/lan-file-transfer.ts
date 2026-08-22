@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import type TcpSocket from "react-native-tcp-socket/lib/types/Socket";
 import { BEST_SPEED, zip } from "react-native-zip-archive";
 
-import { createSharedDirectory, createTemporaryArchive, deleteNativeFile, deleteSharedEntry, getNativeFileSize, listSharedDirectory, readNativeFileChunkBase64, readSharedFileBase64, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess, saveSharedFile, saveSharedText, sharedPath, type SharedStorageEntry } from "@/lib/external-storage";
+import { appendSharedUploadChunk, createSharedDirectory, createSharedUploadTarget, createTemporaryArchive, deleteNativeFile, deleteSharedEntry, getNativeFileSize, listSharedDirectory, readNativeFileChunkBase64, readSharedFileBase64, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess, saveSharedFile, saveSharedText, sharedPath, type SharedStorageEntry } from "@/lib/external-storage";
 import { fileManagerHtmlPage } from "@/lib/lan-file-manager-page";
 import { persistTransferredScript } from "@/lib/recorder-files";
 import type { ScriptProject, Speaker } from "@/shared/recorder-types";
@@ -15,6 +15,7 @@ const MAX_SCRIPT_SIZE = 3 * 1024 * 1024;
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_HTTP_REQUEST_SIZE = Math.ceil(MAX_FILE_SIZE * 1.4) + 64 * 1024;
 const STREAM_CHUNK_SIZE = 48 * 1024;
+const UPLOAD_CHUNK_SIZE = 384 * 1024;
 
 type ServerState = "stopped" | "starting" | "running" | "error";
 type TcpServer = {
@@ -34,12 +35,14 @@ export type LanTransferStatus = { running: boolean; starting: boolean; address?:
 
 type RecordingDownload = { id: string; name: string; uri: string; size: number; recordedAt?: string };
 type ActiveSession = { address: string; token: string; scripts: TransferredScript[]; projects: ScriptProject[]; speakers: Speaker[]; defaultDirectory: string };
+type UploadSession = { nativePath: string; relativePath: string; totalSize: number; receivedSize: number; nextIndex: number };
 
 let activeSession: ActiveSession | null = null;
 let nativeTcp: TcpFactory | null = null;
 let tcpServer: TcpServer | null = null;
 let serverState: ServerState = "stopped";
 let serverError: string | undefined;
+const uploadSessions = new Map<string, UploadSession>();
 
 function getTcpSocket() {
   if (Platform.OS === "web") throw new Error("文件快传需要使用重新构建后的 Android 应用。");
@@ -56,6 +59,12 @@ function makeToken() {
 
 function safeFileName(value: string) {
   return value.replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_").slice(0, 80) || "recording.wav";
+}
+
+function byteLengthFromBase64(value: string) {
+  const compact = value.replace(/\s/g, "");
+  const padding = compact.endsWith("==") ? 2 : compact.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
 }
 
 function isAuthorized(request: HttpRequest) {
@@ -153,6 +162,57 @@ async function routeRequest(request: HttpRequest): Promise<RouteResponse> {
       const path = await saveSharedFile(payload.path ?? "", payload.name ?? "", payload.base64);
       return json({ path });
     } catch (error) { return json({ error: error instanceof Error ? error.message : "无法上传文件。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/upload-start") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { path?: string; name?: string; size?: number };
+      const totalSize = Number(payload.size);
+      if (!Number.isSafeInteger(totalSize) || totalSize <= 0) throw new Error("文件大小无效。");
+      const target = await createSharedUploadTarget(payload.path ?? "", payload.name ?? "");
+      const uploadId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      uploadSessions.set(uploadId, { ...target, totalSize, receivedSize: 0, nextIndex: 0 });
+      return json({ uploadId, path: target.relativePath, chunkSize: UPLOAD_CHUNK_SIZE });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法创建上传任务。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/upload-chunk") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { uploadId?: string; index?: number; base64?: string };
+      const session = typeof payload.uploadId === "string" ? uploadSessions.get(payload.uploadId) : undefined;
+      const index = Number(payload.index);
+      if (!session) throw new Error("上传任务已失效，请重新选择文件。");
+      if (!Number.isInteger(index) || index !== session.nextIndex) throw new Error("上传分块顺序无效，请重新上传。");
+      if (typeof payload.base64 !== "string" || !payload.base64) throw new Error("上传分块为空。");
+      const chunkSize = byteLengthFromBase64(payload.base64);
+      if (!chunkSize || chunkSize > UPLOAD_CHUNK_SIZE) throw new Error("上传分块大小无效。");
+      if (session.receivedSize + chunkSize > session.totalSize) throw new Error("上传内容超过文件大小。");
+      await appendSharedUploadChunk(session.nativePath, payload.base64);
+      session.receivedSize += chunkSize;
+      session.nextIndex += 1;
+      return json({ receivedSize: session.receivedSize, totalSize: session.totalSize });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法写入上传分块。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/upload-complete") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { uploadId?: string };
+      const uploadId = typeof payload.uploadId === "string" ? payload.uploadId : "";
+      const session = uploadSessions.get(uploadId);
+      if (!session) throw new Error("上传任务已失效，请重新选择文件。");
+      if (session.receivedSize !== session.totalSize) throw new Error("文件尚未完整上传。");
+      uploadSessions.delete(uploadId);
+      return json({ path: session.relativePath });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法完成上传。" }, 400); }
+  }
+  if (request.method === "POST" && request.path === "/api/fs/upload-cancel") {
+    try {
+      const payload = JSON.parse(request.body || "{}") as { uploadId?: string };
+      const uploadId = typeof payload.uploadId === "string" ? payload.uploadId : "";
+      const session = uploadSessions.get(uploadId);
+      if (session) {
+        uploadSessions.delete(uploadId);
+        await deleteNativeFile(session.nativePath);
+      }
+      return json({ cancelled: true });
+    } catch (error) { return json({ error: error instanceof Error ? error.message : "无法取消上传。" }, 400); }
   }
   if (request.method === "POST" && request.path === "/api/fs/delete") {
     try {
@@ -346,4 +406,6 @@ export function stopLanFileTransfer() {
     try { tcpServer.close(); } catch { /* stopping a closed server is safe to ignore */ }
   }
   tcpServer = null;
+  for (const session of uploadSessions.values()) void deleteNativeFile(session.nativePath);
+  uploadSessions.clear();
 }

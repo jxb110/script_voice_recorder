@@ -8,7 +8,7 @@ describe("局域网文件管理页面", () => {
 
     expect(page).toContain("var current='record_jxb/wave'");
     expect(page).toContain("/api/fs/list?path=");
-    expect(page).toContain("/api/fs/upload");
+    expect(page).toContain("/api/fs/upload-start");
   });
 
   it("提供页面错误反馈，便于电脑端定位浏览器脚本问题", () => {
@@ -19,8 +19,10 @@ describe("局域网文件管理页面", () => {
     const page = fileManagerHtmlPage();
 
     expect(page).toContain("Array.prototype.slice.call(files)");
-    expect(page).toContain("drop-zone");
+    expect(page).toContain("directory-panel");
     expect(page).toContain("event.dataTransfer&&event.dataTransfer.files");
+    expect(page).toContain("/api/fs/upload-chunk");
+    expect(page).toContain("/api/fs/upload-complete");
     expect(page).toContain("已完成 '+succeeded+'/'+selected.length+' 个文件上传。");
     expect(page).toContain("data-download-folder");
     expect(page).toContain("/api/fs/download-folder?path=");
