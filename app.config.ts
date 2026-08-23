@@ -38,6 +38,16 @@ const env = {
   androidPackage: bundleId,
 };
 
+const androidVersionCode = Number.parseInt(
+  process.env.ANDROID_VERSION_CODE ?? "2",
+  10,
+);
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 2) {
+  throw new Error(
+    "ANDROID_VERSION_CODE must be a safe integer greater than or equal to 2.",
+  );
+}
+
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
@@ -51,9 +61,9 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
-    "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     adaptiveIcon: {
@@ -65,7 +75,17 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["RECORD_AUDIO", "POST_NOTIFICATIONS", "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE", "MANAGE_EXTERNAL_STORAGE", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+    versionCode: androidVersionCode,
+    permissions: [
+      "RECORD_AUDIO",
+      "POST_NOTIFICATIONS",
+      "INTERNET",
+      "ACCESS_NETWORK_STATE",
+      "ACCESS_WIFI_STATE",
+      "MANAGE_EXTERNAL_STORAGE",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE",
+    ],
     intentFilters: [
       {
         action: "VIEW",
@@ -91,9 +111,10 @@ const config: ExpoConfig = {
     [
       "expo-media-library",
       {
-        "savePhotosPermission": "Allow $(PRODUCT_NAME) to save recorded audio to your device.",
-        "granularPermissions": ["audio"]
-      }
+        savePhotosPermission:
+          "Allow $(PRODUCT_NAME) to save recorded audio to your device.",
+        granularPermissions: ["audio"],
+      },
     ],
     "expo-asset",
     "expo-font",
@@ -101,14 +122,16 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
+        microphonePermission:
+          "Allow $(PRODUCT_NAME) to access your microphone.",
       },
     ],
     [
       "react-native-audio-api",
       {
         iosBackgroundMode: false,
-        iosMicrophonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
+        iosMicrophonePermission:
+          "Allow $(PRODUCT_NAME) to access your microphone.",
         androidPermissions: ["android.permission.RECORD_AUDIO"],
         androidForegroundService: false,
         disableFFmpeg: true,

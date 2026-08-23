@@ -1,0 +1,119 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=1536
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=1024m
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set Android version code
+        run: echo "ANDROID_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+
+      - name: Install dependencies and apply compatibility patch
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          ./gradlew :app:assembleRelease \
+            --no-daemon \
+            --max-workers=1 \
+            -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=1024m"
+
+      - name: Verify and prepare APK artifact
+        id: apk
+        run: |
+          set -euo pipefail
+          APK_SOURCE="android/app/build/outputs/apk/release/app-release.apk"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          APK_NAME="script_voice_recorder-v2.0.0-${SHORT_SHA}.apk"
+          mkdir -p dist
+          cp "$APK_SOURCE" "dist/$APK_NAME"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "dist/$APK_NAME" | head -n 1 | tee dist/apk-metadata.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "dist/$APK_NAME" | tee dist/apk-signature.txt
+          sha256sum "dist/$APK_NAME" | tee dist/apk-sha256.txt
+          {
+            echo "apk_name=$APK_NAME"
+            echo "short_sha=$SHORT_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish build summary
+        run: |
+          {
+            echo "## Android APK build"
+            echo
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Commit | \\`${{ steps.apk.outputs.short_sha }}\\` |"
+            echo "| Version | \\`2.0.0 ($ANDROID_VERSION_CODE)\\` |"
+            echo "| APK | \\`${{ steps.apk.outputs.apk_name }}\\` |"
+            echo
+            echo '```text'
+            cat dist/apk-sha256.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: script-voice-recorder-v2.0.0-${{ steps.apk.outputs.short_sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
