@@ -1,6 +1,7 @@
-import { View, type ViewProps } from "react-native";
+import { StyleSheet, View, type ViewProps } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
+import { LiquidGlassBackdrop } from "@/components/liquid-glass";
 import { cn } from "@/lib/utils";
 
 export interface ScreenContainerProps extends ViewProps {
@@ -48,14 +49,8 @@ export function ScreenContainer({
   ...props
 }: ScreenContainerProps) {
   return (
-    <View
-      className={cn(
-        "flex-1",
-        "bg-background",
-        containerClassName
-      )}
-      {...props}
-    >
+    <View className={cn("flex-1", containerClassName)} style={styles.root} {...props}>
+      <LiquidGlassBackdrop />
       <SafeAreaView
         edges={edges}
         className={cn("flex-1", safeAreaClassName)}
@@ -66,3 +61,5 @@ export function ScreenContainer({
     </View>
   );
 }
+
+const styles = StyleSheet.create({ root: { backgroundColor: "#EEF4FF" } });
