@@ -87,7 +87,7 @@ export default function SettingsScreen() {
     <View style={styles.page}>
       <View style={styles.topBar}>
         <View style={styles.titleGroup}><Text style={styles.title}>{copy.title}</Text><Text style={styles.subtitle}>{copy.subtitle}</Text></View>
-        <TouchableOpacity accessibilityLabel={copy.save} disabled={!hasUnsavedChanges} onPress={() => saveDraft(true)} style={[saveIconStyles.button, !hasUnsavedChanges && saveIconStyles.disabled]}><MaterialIcons color="#4669DE" name="check" size={19} /></TouchableOpacity>
+        <TouchableOpacity accessibilityLabel={copy.save} disabled={!hasUnsavedChanges} onPress={() => saveDraft(true)} style={[saveIconStyles.button, !hasUnsavedChanges && saveIconStyles.disabled]}><MaterialIcons color="#FFFFFF" name="check" size={19} /></TouchableOpacity>
       </View>
       <GlassSurface style={styles.card} intensity={34}>
         <View>
@@ -117,8 +117,8 @@ function CompactNumber({ label, unit, value, onChange }: { label: string; unit: 
 function ProfileStat({ label, value }: { label: string; value: string }) { return <View style={styles.profileStat}><Text style={styles.profileStatValue}>{value}</Text><Text style={styles.profileStatLabel}>{label}</Text></View>; }
 
 const saveIconStyles = StyleSheet.create({
-  button: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.62)", borderColor: "rgba(255,255,255,0.92)", borderRadius: 15, borderWidth: 1, elevation: 3, height: 42, justifyContent: "center", shadowColor: "#5B78AD", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.13, shadowRadius: 13, width: 42 },
-  disabled: { backgroundColor: "rgba(239,244,255,0.46)", opacity: 0.56 },
+  button: { alignItems: "center", backgroundColor: "#4B6FE6", borderColor: "rgba(255,255,255,0.9)", borderRadius: 15, borderWidth: 1, elevation: 4, height: 42, justifyContent: "center", shadowColor: "#3658B3", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.23, shadowRadius: 13, width: 42 },
+  disabled: { backgroundColor: "#A8B7E3", opacity: 0.64 },
 });
 
 const styles = StyleSheet.create({
