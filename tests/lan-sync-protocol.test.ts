@@ -6,6 +6,10 @@ describe("LAN sync protocol", () => {
   it("normalizes Android decimal byte-list socket payloads before parsing handshake responses", () => {
     expect(new TextDecoder().decode(normalizeLanSocketChunk("72,84,84,80,47,49,46,49,32,49,48,49"))).toBe("HTTP/1.1 101");
     expect(new TextDecoder().decode(normalizeLanSocketChunk("HTTP/1.1 101"))).toBe("HTTP/1.1 101");
+    expect(new TextDecoder().decode(normalizeLanSocketChunk({ type: "Buffer", data: [72, 84, 84, 80] }))).toBe("HTTP");
+    expect(new TextDecoder().decode(normalizeLanSocketChunk({ data: "72,84,84,80" }))).toBe("HTTP");
+    expect(new TextDecoder().decode(normalizeLanSocketChunk("[72, 84, 84, 80]"))).toBe("HTTP");
+    expect(new TextDecoder().decode(normalizeLanSocketChunk({ 0: 72, 1: 84, 2: 84, 3: 80 }))).toBe("HTTP");
   });
 
   it("creates a short local room code", () => {

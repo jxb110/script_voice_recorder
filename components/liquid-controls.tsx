@@ -43,10 +43,10 @@ export function LiquidSegment({ labels, selectedIndex, onSelect }: LiquidSegment
 type LiquidSliderProps = ComponentProps<typeof Slider> & { containerStyle?: StyleProp<ViewStyle> };
 
 export function LiquidSlider({ containerStyle, style, ...props }: LiquidSliderProps) {
-  return <View style={[styles.sliderShell, containerStyle]}>
+  return <View style={[styles.sliderShell, style, containerStyle]}>
     <LinearGradient pointerEvents="none" colors={["rgba(85,118,216,0.92)", "rgba(114,223,241,0.9)"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={styles.sliderLiquid} />
     <View pointerEvents="none" style={styles.sliderShine} />
-    <Slider {...props} maximumTrackTintColor="rgba(130,151,197,0.26)" minimumTrackTintColor="rgba(79,110,232,0.92)" style={[styles.slider, style]} thumbTintColor="#FFFFFF" />
+    <Slider {...props} maximumTrackTintColor="rgba(130,151,197,0.26)" minimumTrackTintColor="rgba(79,110,232,0.92)" style={styles.slider} thumbTintColor="#FFFFFF" />
   </View>;
 }
 

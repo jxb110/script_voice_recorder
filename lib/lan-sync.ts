@@ -141,7 +141,7 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
       socket.setNoDelay(true);
       socket.setKeepAlive(true);
       const key = Buffer.from(Crypto.randomUUID(), "utf8").toString("base64");
-      socket.write(`GET /sync HTTP/1.1\r\nHost: ${endpoint.host}:${endpoint.port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+      socket.write(Buffer.from(`GET /sync HTTP/1.1\r\nHost: ${endpoint.host}:${endpoint.port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`, "utf8"));
     });
     socket.setTimeout(8_000, () => finish(new Error("连接主控端超时，请检查主控 IP、端口和局域网连接。")));
     socket.on("data", (chunk) => {
@@ -152,7 +152,15 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
         const marker = transport.handshake.indexOf("\r\n\r\n");
         if (marker < 0) return;
         const response = transport.handshake.subarray(0, marker).toString("utf8");
-        if (!response.startsWith("HTTP/1.1 101")) { finish(new Error(`主控端拒绝连接：${response.split("\r\n")[0] || "握手失败"}`)); return; }
+        if (!response.startsWith("HTTP/1.1 101")) {
+          const status = response.split("\r\n")[0] || "握手失败";
+          const reason = response.match(/x-script-sync-error:\s*([^\r\n]+)/i)?.[1];
+          const hint = reason === "missing-websocket-upgrade" || status.includes("400")
+            ? "主控未收到有效的 WebSocket 升级请求。请确认两台手机都安装了本次新版 APK。"
+            : "请确认主控端已创建房间、IP 和端口正确。";
+          finish(new Error(`主控端拒绝连接：${status}${reason ? `（${reason}）` : ""}。${hint}`));
+          return;
+        }
         transport.upgraded = true;
         sendClient({ type: "hello", roomCode: session.roomCode ?? "", projectId: session.projectId ?? "", deviceId: self.id, deviceName: self.name, sentAt: now() });
         const remainder = transport.handshake.subarray(marker + 4);
@@ -303,7 +311,7 @@ async function completeHandshake(peer: Peer, header: string, remainder: Buffer) 
   const first = lines.shift() ?? "";
   const headers = new Map(lines.map((line) => { const split = line.indexOf(":"); return [split < 0 ? "" : line.slice(0, split).trim().toLowerCase(), split < 0 ? "" : line.slice(split + 1).trim()]; }));
   const key = headers.get("sec-websocket-key");
-  if (!first.startsWith("GET ") || !key) { peer.socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"); return; }
+  if (!first.startsWith("GET ") || !key) { peer.socket.end("HTTP/1.1 400 Bad Request\r\nX-Script-Sync-Error: missing-websocket-upgrade\r\nConnection: close\r\n\r\n"); return; }
   try {
     const accept = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, `${key}${WS_GUID}`, { encoding: Crypto.CryptoEncoding.BASE64 });
     peer.socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);

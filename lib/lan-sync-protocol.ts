@@ -13,19 +13,33 @@ export function createLanSyncAddress(hostInput: string, portInput: string | numb
   return `ws://${host}:${port}`;
 }
 
-/** Normalizes native TCP payloads, including Android implementations that return bytes as "72,84,..." strings. */
-export function normalizeLanSocketChunk(chunk: string | number[] | Uint8Array | ArrayBuffer) {
+/** Normalizes native TCP payloads, including Android implementations that return bytes as "72,84,..." strings or Buffer-like objects. */
+export function normalizeLanSocketChunk(chunk: unknown): Uint8Array {
   if (typeof chunk === "string") {
-    const compact = chunk.trim();
-    if (/^(?:\d{1,3},)*\d{1,3}$/.test(compact)) {
-      const values = compact.split(",").map(Number);
+    const compact = chunk.trim().replace(/\s+/g, "");
+    const list = compact.replace(/^\[/, "").replace(/\]$/, "");
+    if (/^(?:\d{1,3},)*\d{1,3}$/.test(list)) {
+      const values = list.split(",").map(Number);
       if (values.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) return new Uint8Array(values);
     }
     return new TextEncoder().encode(chunk);
   }
   if (Array.isArray(chunk)) return new Uint8Array(chunk);
   if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
-  return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  if (ArrayBuffer.isView(chunk)) return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  if (chunk && typeof chunk === "object") {
+    const bufferLike = chunk as { data?: unknown; type?: unknown; toString?: () => string };
+    if (bufferLike.type === "Buffer" && Array.isArray(bufferLike.data)) return new Uint8Array(bufferLike.data);
+    if (typeof bufferLike.data === "string" || Array.isArray(bufferLike.data) || bufferLike.data instanceof ArrayBuffer || ArrayBuffer.isView(bufferLike.data)) return normalizeLanSocketChunk(bufferLike.data);
+    const text = bufferLike.toString?.();
+    if (text && text !== "[object Object]") return normalizeLanSocketChunk(text);
+    const indexedValues = Object.entries(chunk as Record<string, unknown>)
+      .filter(([key, value]) => /^\d+$/.test(key) && typeof value === "number")
+      .sort(([left], [right]) => Number(left) - Number(right))
+      .map(([, value]) => value as number);
+    if (indexedValues.length && indexedValues.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) return new Uint8Array(indexedValues);
+  }
+  return new Uint8Array(0);
 }
 
 export type SyncRoomInvite = { host: string; port: number; roomCode: string };

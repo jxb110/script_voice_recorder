@@ -57,12 +57,12 @@ export function LiquidTabLabel({ children, color, focused }: LiquidTabLabelProps
 }
 
 const styles = StyleSheet.create({
-  iconArea: { alignItems: "center", height: 48, justifyContent: "center", overflow: "visible", width: 70 },
-  selectionDock: { backgroundColor: "rgba(238,246,255,0.82)", borderColor: "rgba(255,255,255,0.98)", borderRadius: 23, borderWidth: 1, height: 46, position: "absolute", shadowColor: "#4168D5", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.28, shadowRadius: 14, width: 62 },
+  iconArea: { alignItems: "center", height: 54, justifyContent: "center", overflow: "visible", width: 74 },
+  selectionDock: { backgroundColor: "rgba(238,246,255,0.86)", borderColor: "rgba(255,255,255,0.98)", borderRadius: 27, borderWidth: 1, height: 52, position: "absolute", shadowColor: "#4168D5", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, width: 68 },
   dockGlint: { backgroundColor: "rgba(255,255,255,0.95)", borderRadius: 99, height: 11, left: 9, position: "absolute", right: 9, top: 4 },
-  dockRim: { borderColor: "rgba(117,167,255,0.42)", borderRadius: 20, borderWidth: 1, bottom: 3, left: 3, position: "absolute", right: 3, top: 3 },
+  dockRim: { borderColor: "rgba(117,167,255,0.46)", borderRadius: 24, borderWidth: 1, bottom: 3, left: 3, position: "absolute", right: 3, top: 3 },
   icon: { alignItems: "center", justifyContent: "center", zIndex: 2 },
-  flash: { backgroundColor: "rgba(137,190,255,0.88)", borderRadius: 34, height: 62, position: "absolute", width: 62 },
+  flash: { backgroundColor: "rgba(137,190,255,0.9)", borderRadius: 40, height: 72, position: "absolute", width: 72 },
   bubble: { borderColor: "rgba(255,255,255,0.97)", borderWidth: 1.35, elevation: 7, overflow: "hidden", position: "absolute", shadowColor: "#355DD4", shadowOpacity: 0.42, shadowRadius: 7, zIndex: 5 },
   bubbleGlint: { backgroundColor: "rgba(255,255,255,0.74)", borderRadius: 99, height: 4, left: 3, position: "absolute", right: 3, top: 2 },
   bubbleBlue: { backgroundColor: "#397CFF", borderRadius: 10, height: 20, right: 5, top: -1, width: 20 },
