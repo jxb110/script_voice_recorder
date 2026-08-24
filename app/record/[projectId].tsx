@@ -1,5 +1,4 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import Slider from "@react-native-community/slider";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
@@ -8,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { AudioWaveform } from "@/components/audio-waveform";
+import { LiquidSlider } from "@/components/liquid-controls";
 import { GlassSurface } from "@/components/liquid-glass";
 import { PhoneticText } from "@/components/phonetic-text";
 import { ScreenContainer } from "@/components/screen-container";
@@ -233,7 +233,7 @@ export default function RecordingScreen() {
               <MaterialIcons color={showFontControls ? "#FFFFFF" : "#4669DE"} name="format-size" size={21} />
             </TouchableOpacity>
           </View>
-          {showFontControls ? <View style={styles.fontControl}><Text style={styles.fontControlLabel}>{t("fontSize")}</Text><Slider accessibilityLabel={t("fontSize")} minimumTrackTintColor="#2F4DA0" maximumTrackTintColor="#DDE4F0" thumbTintColor="#2F4DA0" minimumValue={READING_FONT_SIZE.minimumValue} maximumValue={READING_FONT_SIZE.maximumValue} step={READING_FONT_SIZE.step} value={readingFontSize} onValueChange={(value) => setReadingFontSize(clampReadingFontSize(value))} onSlidingComplete={(value) => updateSettings({ ...settings, readingFontSize: clampReadingFontSize(value) })} style={styles.fontSlider} /><Text style={styles.fontValue}>{readingFontSize}</Text></View> : null}
+          {showFontControls ? <View style={styles.fontControl}><Text style={styles.fontControlLabel}>{t("fontSize")}</Text><LiquidSlider accessibilityLabel={t("fontSize")} maximumValue={READING_FONT_SIZE.maximumValue} minimumValue={READING_FONT_SIZE.minimumValue} onSlidingComplete={(value) => updateSettings({ ...settings, readingFontSize: clampReadingFontSize(value) })} onValueChange={(value) => setReadingFontSize(clampReadingFontSize(value))} step={READING_FONT_SIZE.step} style={styles.fontSlider} value={readingFontSize} /><Text style={styles.fontValue}>{readingFontSize}</Text></View> : null}
           <ScrollView accessibilityLabel={t("readingText")} contentContainerStyle={styles.readingTextContent} nestedScrollEnabled persistentScrollbar showsVerticalScrollIndicator style={styles.readingTextArea}>
             <PhoneticText fontSize={readingFontSize} tokens={sentence.tokens} />
           </ScrollView>

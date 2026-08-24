@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { LiquidGlassButton, LiquidSegment } from "@/components/liquid-controls";
 import { GlassSurface } from "@/components/liquid-glass";
 import { SettingsFooter } from "@/components/settings-footer";
 import { useAppLanguage } from "@/lib/i18n";
@@ -86,15 +87,15 @@ export default function SettingsScreen() {
     <View style={styles.page}>
       <View style={styles.topBar}>
         <View style={styles.titleGroup}><Text style={styles.title}>{copy.title}</Text><Text style={styles.subtitle}>{copy.subtitle}</Text></View>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={copy.save} disabled={!hasUnsavedChanges} style={[styles.topSave, !hasUnsavedChanges && styles.topSaveDisabled]} onPress={() => saveDraft(true)}><MaterialIcons color="#FFFFFF" name="check" size={18} /><Text style={styles.topSaveText}>{copy.save}</Text></TouchableOpacity>
+        <LiquidGlassButton disabled={!hasUnsavedChanges} onPress={() => saveDraft(true)} style={styles.topSave}><MaterialIcons color="#FFFFFF" name="check" size={18} /><Text style={styles.topSaveText}>{copy.save}</Text></LiquidGlassButton>
       </View>
       <GlassSurface style={styles.card} intensity={34}>
         <View>
           <View style={styles.formatRow}><View style={styles.formatIcon}><MaterialIcons color="#1E8B61" name="graphic-eq" size={19} /></View><View style={styles.formatCopy}><Text style={styles.formatTitle}>{copy.format}</Text><Text style={styles.formatHint}>PCM</Text></View><Text style={styles.fixedBadge}>WAV</Text></View>
           <View style={styles.divider} />
-          <SettingLine label={copy.depth}><Segment labels={bitDepths.map((value) => `${value}-bit`)} selectedIndex={bitDepths.indexOf(draft.bitDepth)} onSelect={(index) => setDraft((current) => ({ ...current, bitDepth: bitDepths[index] }))} /></SettingLine>
+          <SettingLine label={copy.depth}><LiquidSegment labels={bitDepths.map((value) => `${value}-bit`)} selectedIndex={bitDepths.indexOf(draft.bitDepth)} onSelect={(index) => setDraft((current) => ({ ...current, bitDepth: bitDepths[index] }))} /></SettingLine>
           <SettingLine label={copy.sample}><View style={styles.rateGrid}>{sampleRates.map((rate) => <TouchableOpacity key={rate} onPress={() => setDraft((current) => ({ ...current, sampleRate: rate }))} style={[styles.rateChip, draft.sampleRate === rate && styles.rateChipSelected]}><Text style={[styles.rateText, draft.sampleRate === rate && styles.rateTextSelected]}>{rate === 44100 ? "44.1k" : `${rate / 1000}k`}</Text></TouchableOpacity>)}</View></SettingLine>
-          <SettingLine label={copy.channels}><Segment labels={[copy.mono, copy.stereo]} selectedIndex={draft.channels - 1} onSelect={(index) => setDraft((current) => ({ ...current, channels: (index + 1) as 1 | 2 }))} /></SettingLine>
+          <SettingLine label={copy.channels}><LiquidSegment labels={[copy.mono, copy.stereo]} selectedIndex={draft.channels - 1} onSelect={(index) => setDraft((current) => ({ ...current, channels: (index + 1) as 1 | 2 }))} /></SettingLine>
           <View style={styles.divider} />
           <Text style={styles.groupLabel}>{copy.silence}</Text>
           <View style={styles.silenceRow}><CompactNumber label={copy.leading} unit={copy.milliseconds} value={draft.leadingSilenceMs} onChange={(leadingSilenceMs) => setDraft((current) => ({ ...current, leadingSilenceMs }))} /><CompactNumber label={copy.trailing} unit={copy.milliseconds} value={draft.trailingSilenceMs} onChange={(trailingSilenceMs) => setDraft((current) => ({ ...current, trailingSilenceMs }))} /></View>

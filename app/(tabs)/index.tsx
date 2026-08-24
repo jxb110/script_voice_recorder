@@ -1,8 +1,8 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+import { LiquidGlassButton } from "@/components/liquid-controls";
 import { GlassSurface } from "@/components/liquid-glass";
 import { ScreenContainer } from "@/components/screen-container";
 import { useRecorder } from "@/lib/recorder-context";
@@ -34,13 +34,13 @@ export default function HomeScreen() {
         <View style={styles.statDivider} />
         <View style={styles.stat}><Text style={styles.statNumber}>{speakers.length}</Text><Text style={styles.statLabel}>{t("speakers")}</Text></View>
       </GlassSurface>
-      <LinearGradient colors={["#4669DE", "#7194F8", "#5B6CDB"]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={styles.primary}>
-        <TouchableOpacity style={styles.primaryTap} onPress={() => router.push("/new-project" as never)}>
+      <LiquidGlassButton onPress={() => router.push("/new-project" as never)} style={styles.primary}>
+        <View style={styles.primaryTap}>
           <View style={styles.primaryIcon}><MaterialIcons color="#3656B7" name="add" size={23} /></View>
           <View style={styles.primaryCopy}><Text style={styles.primaryTitle}>{t("newTask")}</Text><Text style={styles.primaryHint}>{t("selectSpeakerAndImport")}</Text></View>
           <MaterialIcons color="#FFFFFF" name="arrow-forward" size={21} />
-        </TouchableOpacity>
-      </LinearGradient>
+        </View>
+      </LiquidGlassButton>
       <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("recentTasks")}</Text><TouchableOpacity onPress={() => router.push("/(tabs)/scripts" as never)}><Text style={styles.viewAll}>{t("allTasks")}</Text></TouchableOpacity></View>
       <FlatList
         data={projects.slice(0, 4)}
