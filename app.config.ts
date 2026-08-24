@@ -39,19 +39,19 @@ const env = {
 };
 
 const androidVersionCode = Number.parseInt(
-  process.env.ANDROID_VERSION_CODE ?? "2",
+  process.env.ANDROID_VERSION_CODE ?? "3",
   10,
 );
-if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 2) {
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 3) {
   throw new Error(
-    "ANDROID_VERSION_CODE must be a safe integer greater than or equal to 2.",
+    "ANDROID_VERSION_CODE must be a safe integer greater than or equal to 3.",
   );
 }
 
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "2.0.0",
+  version: "3.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,

@@ -30,7 +30,7 @@ export default function SettingsScreen() {
   const bypassGuardRef = useRef(false);
   const [draft, setDraft] = useState<RecorderSettings>(settings);
   const zh = language === "zh";
-  const appVersion = "2.0.0";
+  const appVersion = "3.0.0";
   const copy = zh ? {
     title: "录音设置", subtitle: "WAV 无损录音", save: "保存", saved: "设置已保存", savedHint: "新参数会在下一句开始录制时生效。", format: "WAV", depth: "位深", sample: "采样率", channels: "声道", mono: "单声道", stereo: "立体声", silence: "首尾静音", leading: "首端", trailing: "尾端", milliseconds: "毫秒", note: "32-bit 文件更大；语音通常推荐 16-bit。", profile: "当前录制配置", profileHint: "下一句将按此无损 WAV 参数采集。", unsavedTitle: "有未保存的设置", unsavedHint: "是否保存当前更改后再离开？", keep: "继续编辑", discard: "放弃更改", saveLeave: "保存并离开",
   } : {

@@ -43,20 +43,24 @@ export function LiquidTabIcon({ focused, color, name, size }: LiquidTabIconProps
   const iconLift = motion.interpolate({ inputRange: [0, 0.28, 0.6, 1], outputRange: [0, 3, -4, 0] });
   const flashOpacity = motion.interpolate({ inputRange: [0, 0.14, 0.38, 1], outputRange: [0, 0.95, 0.08, 0] });
   const flashScale = motion.interpolate({ inputRange: [0, 0.38, 1], outputRange: [0.55, 1.35, 1.65] });
-  const bubbleOpacity = motion.interpolate({ inputRange: [0, 0.16, 0.68, 1], outputRange: [0, 0.95, 0.5, 0] });
-  const bubbleOneX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, 14] });
-  const bubbleOneY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -17] });
+  const bubbleOpacity = motion.interpolate({ inputRange: [0, 0.14, 0.76, 1], outputRange: [0, 1, 0.68, 0] });
+  const bubbleScale = motion.interpolate({ inputRange: [0, 0.16, 0.76, 1], outputRange: [0.16, 1.28, 1, 0.82] });
+  const bubbleOneX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, 18] });
+  const bubbleOneY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -24] });
   const bubbleTwoX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, 8] });
-  const bubbleTwoY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -23] });
-  const bubbleThreeX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, 19] });
-  const bubbleThreeY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -9] });
+  const bubbleTwoY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -31] });
+  const bubbleThreeX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, 25] });
+  const bubbleThreeY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -12] });
+  const bubbleFourX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -15] });
+  const bubbleFourY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, -19] });
 
   return (
     <View pointerEvents="none" style={styles.iconArea}>
       <Animated.View style={[styles.flash, { opacity: flashOpacity, transform: [{ scale: flashScale }] }]} />
-      <Animated.View style={[styles.bubble, styles.bubbleOne, { opacity: bubbleOpacity, transform: [{ translateX: bubbleOneX }, { translateY: bubbleOneY }] }]} />
-      <Animated.View style={[styles.bubble, styles.bubbleTwo, { opacity: bubbleOpacity, transform: [{ translateX: bubbleTwoX }, { translateY: bubbleTwoY }] }]} />
-      <Animated.View style={[styles.bubble, styles.bubbleThree, { opacity: bubbleOpacity, transform: [{ translateX: bubbleThreeX }, { translateY: bubbleThreeY }] }]} />
+      <Animated.View style={[styles.bubble, styles.bubbleOne, { opacity: bubbleOpacity, transform: [{ translateX: bubbleOneX }, { translateY: bubbleOneY }, { scale: bubbleScale }] }]} />
+      <Animated.View style={[styles.bubble, styles.bubbleTwo, { opacity: bubbleOpacity, transform: [{ translateX: bubbleTwoX }, { translateY: bubbleTwoY }, { scale: bubbleScale }] }]} />
+      <Animated.View style={[styles.bubble, styles.bubbleThree, { opacity: bubbleOpacity, transform: [{ translateX: bubbleThreeX }, { translateY: bubbleThreeY }, { scale: bubbleScale }] }]} />
+      <Animated.View style={[styles.bubble, styles.bubbleFour, { opacity: bubbleOpacity, transform: [{ translateX: bubbleFourX }, { translateY: bubbleFourY }, { scale: bubbleScale }] }]} />
       <Animated.View style={{ transform: [{ translateY: iconLift }, { rotate: iconRotate }, { scale: iconScale }] }}>
         <IconSymbol color={color} name={name} size={size} />
       </Animated.View>
@@ -74,12 +78,13 @@ export function LiquidTabLabel({ children, color, focused }: LiquidTabLabelProps
 }
 
 const styles = StyleSheet.create({
-  iconArea: { alignItems: "center", height: 29, justifyContent: "center", overflow: "visible", width: 42 },
-  flash: { backgroundColor: "rgba(158, 192, 255, 0.62)", borderRadius: 18, height: 31, position: "absolute", width: 31 },
-  bubble: { borderColor: "rgba(255,255,255,0.78)", borderWidth: 1, position: "absolute" },
-  bubbleOne: { backgroundColor: "#78A4FF", borderRadius: 4, height: 8, right: 3, top: 2, width: 8 },
-  bubbleTwo: { backgroundColor: "#73D9E5", borderRadius: 3, height: 6, right: 8, top: -1, width: 6 },
-  bubbleThree: { backgroundColor: "#9D8BFF", borderRadius: 3.5, height: 7, right: -1, top: 8, width: 7 },
+  iconArea: { alignItems: "center", height: 34, justifyContent: "center", overflow: "visible", width: 50 },
+  flash: { backgroundColor: "rgba(158, 192, 255, 0.72)", borderRadius: 21, height: 38, position: "absolute", width: 38 },
+  bubble: { borderColor: "rgba(255,255,255,0.96)", borderWidth: 1.25, elevation: 5, position: "absolute", shadowColor: "#4369D6", shadowOpacity: 0.35, shadowRadius: 6 },
+  bubbleOne: { backgroundColor: "#4684FF", borderRadius: 6, height: 12, right: 3, top: 3, width: 12 },
+  bubbleTwo: { backgroundColor: "#34D8E5", borderRadius: 5, height: 10, right: 10, top: -2, width: 10 },
+  bubbleThree: { backgroundColor: "#A07DFF", borderRadius: 5.5, height: 11, right: -2, top: 11, width: 11 },
+  bubbleFour: { backgroundColor: "#7CB0FF", borderRadius: 4.5, height: 9, left: 6, top: 8, width: 9 },
   label: { fontSize: 11, fontWeight: "700", lineHeight: 14, marginBottom: 1 },
   labelFocused: { fontWeight: "800" },
 });

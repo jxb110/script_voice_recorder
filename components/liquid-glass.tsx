@@ -28,7 +28,7 @@ export function GlassSurface({ children, style, intensity = 38 }: PropsWithChild
 }
 
 export function GlassNavigationBackground() {
-  return <BlurView experimentalBlurMethod={Platform.OS === "android" ? "dimezisBlurView" : undefined} intensity={58} tint="light" style={StyleSheet.absoluteFill} />;
+  return <BlurView experimentalBlurMethod={Platform.OS === "android" ? "dimezisBlurView" : undefined} intensity={58} tint="light" style={[StyleSheet.absoluteFill, styles.navigationBackground]} />;
 }
 
 const styles = StyleSheet.create({
@@ -36,5 +36,6 @@ const styles = StyleSheet.create({
   indigoOrb: { backgroundColor: "#B8C9FF", height: 310, left: -125, top: 22, width: 310 },
   cyanOrb: { backgroundColor: "#B8EBF2", height: 260, right: -100, top: 230, width: 260 },
   pinkOrb: { backgroundColor: "#EAC9FA", bottom: -130, height: 280, left: 28, width: 280 },
+  navigationBackground: { borderRadius: 24 },
   surface: { backgroundColor: "rgba(255,255,255,0.56)", borderColor: "rgba(255,255,255,0.9)", borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5270B0", shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 9 }, elevation: 4 },
 });

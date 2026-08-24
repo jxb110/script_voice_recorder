@@ -12,10 +12,12 @@ import { GlassSurface } from "@/components/liquid-glass";
 import { PhoneticText } from "@/components/phonetic-text";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAppLanguage } from "@/lib/i18n";
+import { createProjectSyncKey, type SyncCommand } from "@/lib/lan-sync-protocol";
 import { shouldAnimatePromptChange } from "@/lib/prompt-animation";
 import { clampReadingFontSize, READING_FONT_SIZE } from "@/lib/reading-font";
 import { useRecorder } from "@/lib/recorder-context";
 import { canContinueRecordingSession, isLiveWaveformPhase, isProjectRecordingComplete } from "@/lib/recording-session";
+import { useSyncRoom } from "@/lib/sync-room-context";
 import { cancelWavRecording, startWavRecording, stopWavRecording } from "@/lib/wav-recorder";
 import { appendWaveformSample } from "@/lib/waveform-math";
 
@@ -26,7 +28,9 @@ export default function RecordingScreen() {
   const { t } = useAppLanguage();
   const { projectId, sentence: sentenceParam } = useLocalSearchParams<{ projectId: string; sentence?: string }>();
   const { projects, speakers, settings, saveSentenceRecording, updateSettings } = useRecorder();
+  const { status: syncStatus, reportState, sendCommand, subscribeCommands } = useSyncRoom();
   const project = projects.find((item) => item.id === projectId);
+  const syncProjectKey = project ? createProjectSyncKey(project.sourceFileName, project.sentences) : "";
   const [currentIndex, setCurrentIndex] = useState(() => Math.max(0, Number(sentenceParam) || 0));
   const [showSentencePicker, setShowSentencePicker] = useState(false);
   const [phase, setPhase] = useState<RecordingPhase>("idle");
@@ -42,6 +46,8 @@ export default function RecordingScreen() {
   const nativeOperationRef = useRef<Promise<void>>(Promise.resolve());
   const promptWave = useRef(new Animated.Value(0)).current;
   const previousPromptRef = useRef<string | null>(null);
+  const syncCommandHandlerRef = useRef<(command: SyncCommand) => void>(() => undefined);
+  const syncTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   const player = useAudioPlayer(null, { updateInterval: 90 });
   const playerStatus = useAudioPlayerStatus(player);
   useKeepAwake();
@@ -121,6 +127,25 @@ export default function RecordingScreen() {
     cancelPendingOperation();
     void stopRecorderSafely();
   }, []);
+  useEffect(() => {
+    const unsubscribe = subscribeCommands((command) => {
+      if (!syncProjectKey || command.projectId !== syncProjectKey) return;
+      const timer = setTimeout(() => {
+        syncTimersRef.current.delete(timer);
+        syncCommandHandlerRef.current(command);
+      }, Math.max(0, command.executeAt - Date.now()));
+      syncTimersRef.current.add(timer);
+    });
+    return () => {
+      unsubscribe();
+      syncTimersRef.current.forEach((timer) => clearTimeout(timer));
+      syncTimersRef.current.clear();
+    };
+  }, [subscribeCommands, syncProjectKey]);
+  useEffect(() => {
+    if (syncStatus.mode === "idle" || syncStatus.projectId !== syncProjectKey) return;
+    reportState({ state: playerStatus.playing && phase === "idle" ? "playing" : phase, sentenceIndex: currentIndex });
+  }, [currentIndex, phase, playerStatus.playing, reportState, syncProjectKey, syncStatus.mode, syncStatus.projectId]);
 
   if (!project || !sentence || !speaker) return <ScreenContainer className="items-center justify-center px-6"><Text style={styles.missing}>Unable to open this recording sentence.</Text><TouchableOpacity onPress={() => router.replace("/(tabs)" as never)}><Text style={styles.backText}>Back to tasks</Text></TouchableOpacity></ScreenContainer>;
 
@@ -164,7 +189,23 @@ export default function RecordingScreen() {
     player.replace({ uri: sentence.recordingUri }); await player.seekTo(0); player.play();
   };
   const jumpToSentence = (target: number) => { stopPlayback(); setCurrentIndex(target); setShowSentencePicker(false); };
+  const moveToSyncSentence = (target: number) => { cancelPendingOperation(); void stopRecorderSafely(); stopPlayback(); setPhase("idle"); setCurrentIndex(Math.min(Math.max(0, target), total - 1)); };
   const finishTask = () => { stopPlayback(); router.replace(`/project/${project.id}` as never); };
+  const syncActive = syncStatus.mode !== "idle" && syncStatus.projectId === syncProjectKey;
+  const syncHost = syncActive && syncStatus.mode === "host";
+  const syncClient = syncActive && syncStatus.mode === "client";
+  const sendOrRun = (name: "start" | "stop" | "previous" | "next" | "play" | "rerecord", target = currentIndex) => {
+    if (syncHost) { sendCommand(name, target); return true; }
+    return false;
+  };
+  syncCommandHandlerRef.current = (command) => {
+    const target = Math.min(Math.max(0, command.sentenceIndex), total - 1);
+    if (command.name === "previous" || command.name === "next") { moveToSyncSentence(target); return; }
+    if (command.name === "play") { if (target !== currentIndex) { moveToSyncSentence(target); return; } void togglePlay(); return; }
+    if (command.name === "stop") { if (phase === "leading" || phase === "recording") void finish(); return; }
+    if (target !== currentIndex) { moveToSyncSentence(target); return; }
+    if (phase === "idle") void start();
+  };
   const statusCopy = phase === "leading" ? t("leadingSilence") : phase === "recording" ? t("recording") : phase === "trailing" ? t("trailingSilence") : phase === "saving" ? t("saving") : sentence.recordingUri ? t("recorded") : t("ready");
   const waveformActive = isLiveWaveformPhase(phase);
   const waveform = waveformActive ? liveWaveform : sentence.waveform ?? [];
@@ -200,9 +241,9 @@ export default function RecordingScreen() {
         <GlassSurface style={[styles.waveformBlock, glass.waveformBlock]} intensity={25}><View style={styles.waveformHeader}><Text style={[styles.waveformTitle, glass.waveformTitle]}>{waveformActive ? statusCopy : sentence.recordingUri ? t("play") : t("ready")}</Text>{sentence.recordingUri && !waveformActive ? <Text style={[styles.waveformTime, glass.waveformTime]}>{formatSeconds(playerStatus.currentTime)} / {formatSeconds(playerStatus.duration)}</Text> : phase === "recording" ? <Text style={[styles.waveformTime, glass.waveformTime]}>{formatSeconds(recordingDurationMs / 1000)}</Text> : null}</View><AudioWaveform samples={waveform} recording={waveformActive} progress={sentence.recordingUri && !waveformActive ? playbackProgress : 0} /></GlassSurface>
         <Text style={[styles.statusText, phase === "recording" && styles.statusRecording]}>{statusCopy}</Text>
         <View style={styles.bottomActionArea}>
-          <View style={styles.bottomTools}><TouchableOpacity style={[styles.tool, glass.tool, !sentence.recordingUri && styles.toolDisabled]} onPress={togglePlay} disabled={!sentence.recordingUri || isBusy}><MaterialIcons color={sentence.recordingUri ? "#4669DE" : "#B9C2D5"} name={playerStatus.playing ? "pause" : "play-arrow"} size={23} /><Text style={[styles.toolText, glass.toolText, !sentence.recordingUri && styles.toolTextDisabled]}>{playerStatus.playing ? t("pause") : t("play")}</Text></TouchableOpacity><TouchableOpacity style={[styles.tool, glass.tool]} onPress={() => { stopPlayback(); setCurrentIndex((value) => Math.max(0, value - 1)); }} disabled={isBusy || currentIndex === 0}><MaterialIcons color={currentIndex ? "#4669DE" : "#B9C2D5"} name="skip-previous" size={23} /><Text style={[styles.toolText, glass.toolText, currentIndex === 0 && styles.toolTextDisabled]}>{t("previous")}</Text></TouchableOpacity><TouchableOpacity style={[styles.tool, glass.tool]} onPress={() => { stopPlayback(); setCurrentIndex((value) => Math.min(total - 1, value + 1)); }} disabled={isBusy || currentIndex === total - 1}><MaterialIcons color={currentIndex < total - 1 ? "#4669DE" : "#B9C2D5"} name="skip-next" size={23} /><Text style={[styles.toolText, glass.toolText, currentIndex === total - 1 && styles.toolTextDisabled]}>{t("next")}</Text></TouchableOpacity></View>
+          <View style={styles.bottomTools}><TouchableOpacity style={[styles.tool, glass.tool, (!sentence.recordingUri || syncClient) && styles.toolDisabled]} onPress={() => { if (!sendOrRun("play")) void togglePlay(); }} disabled={!sentence.recordingUri || isBusy || syncClient}><MaterialIcons color={sentence.recordingUri ? "#4669DE" : "#B9C2D5"} name={playerStatus.playing ? "pause" : "play-arrow"} size={23} /><Text style={[styles.toolText, glass.toolText, !sentence.recordingUri && styles.toolTextDisabled]}>{playerStatus.playing ? t("pause") : t("play")}</Text></TouchableOpacity><TouchableOpacity style={[styles.tool, glass.tool]} onPress={() => { const target = Math.max(0, currentIndex - 1); if (!sendOrRun("previous", target)) moveToSyncSentence(target); }} disabled={isBusy || syncClient || currentIndex === 0}><MaterialIcons color={currentIndex ? "#4669DE" : "#B9C2D5"} name="skip-previous" size={23} /><Text style={[styles.toolText, glass.toolText, currentIndex === 0 && styles.toolTextDisabled]}>{t("previous")}</Text></TouchableOpacity><TouchableOpacity style={[styles.tool, glass.tool]} onPress={() => { const target = Math.min(total - 1, currentIndex + 1); if (!sendOrRun("next", target)) moveToSyncSentence(target); }} disabled={isBusy || syncClient || currentIndex === total - 1}><MaterialIcons color={currentIndex < total - 1 ? "#4669DE" : "#B9C2D5"} name="skip-next" size={23} /><Text style={[styles.toolText, glass.toolText, currentIndex === total - 1 && styles.toolTextDisabled]}>{t("next")}</Text></TouchableOpacity></View>
           <TouchableOpacity accessibilityLabel={t("sentenceNumber")} accessibilityRole="button" disabled={isBusy} onPress={() => setShowSentencePicker(true)} style={[styles.sentencePickerButton, glass.sentencePickerButton, isBusy && styles.sentencePickerDisabled]}><View style={[styles.sentencePickerIcon, glass.sentencePickerIcon]}><MaterialIcons color="#4669DE" name="format-list-numbered" size={20} /></View><View style={styles.sentencePickerCopy}><Text style={[styles.sentencePickerLabel, glass.sentencePickerLabel]}>{t("sentenceNumber")}</Text><Text style={[styles.sentencePickerValue, glass.sentencePickerValue]}>#{String(currentIndex + 1).padStart(3, "0")} / {total}</Text></View><MaterialIcons color="#4669DE" name="expand-more" size={24} /></TouchableOpacity>
-          {phase === "idle" ? <View style={styles.idleActionRow}><TouchableOpacity style={[styles.recordButton, styles.inlineAction, sentence.recordingUri && styles.rerecordButton]} onPress={start}><MaterialIcons color="#FFFFFF" name="mic" size={23} /><Text style={styles.recordText}>{sentence.recordingUri ? t("replaySentence") : t("startRecording")}</Text></TouchableOpacity>{projectComplete ? <TouchableOpacity style={[styles.completeButton, styles.inlineAction]} onPress={finishTask}><MaterialIcons color="#FFFFFF" name="check-circle" size={22} /><Text style={styles.recordText}>{t("completeTask")}</Text></TouchableOpacity> : null}</View> : phase === "leading" ? <TouchableOpacity style={styles.cancelButton} onPress={() => { cancelPendingOperation(); void stopRecorderSafely(); setPhase("idle"); }}><Text style={styles.cancelText}>{t("cancelPreparation")}</Text></TouchableOpacity> : phase === "recording" ? <TouchableOpacity style={styles.stopButton} onPress={finish}><View style={styles.stopSquare} /><Text style={styles.recordText}>{t("stopRecording")}</Text></TouchableOpacity> : <View style={styles.workingButton}><ActivityIndicator color="#FFFFFF" /><Text style={styles.recordText}>{phase === "trailing" ? t("trailingSilence") : t("saving")}</Text></View>}
+          {phase === "idle" ? <View style={styles.idleActionRow}><TouchableOpacity disabled={syncClient} style={[styles.recordButton, styles.inlineAction, sentence.recordingUri && styles.rerecordButton, syncClient && { opacity: 0.55 }]} onPress={() => { if (!sendOrRun(sentence.recordingUri ? "rerecord" : "start")) void start(); }}><MaterialIcons color="#FFFFFF" name="mic" size={23} /><Text style={styles.recordText}>{sentence.recordingUri ? t("replaySentence") : t("startRecording")}</Text></TouchableOpacity>{projectComplete ? <TouchableOpacity style={[styles.completeButton, styles.inlineAction]} onPress={finishTask}><MaterialIcons color="#FFFFFF" name="check-circle" size={22} /><Text style={styles.recordText}>{t("completeTask")}</Text></TouchableOpacity> : null}</View> : phase === "leading" ? <TouchableOpacity disabled={syncClient} style={[styles.cancelButton, syncClient && { opacity: 0.55 }]} onPress={() => { cancelPendingOperation(); void stopRecorderSafely(); setPhase("idle"); }}><Text style={styles.cancelText}>{t("cancelPreparation")}</Text></TouchableOpacity> : phase === "recording" ? <TouchableOpacity disabled={syncClient} style={[styles.stopButton, syncClient && { opacity: 0.55 }]} onPress={() => { if (!sendOrRun("stop")) void finish(); }}><View style={styles.stopSquare} /><Text style={styles.recordText}>{t("stopRecording")}</Text></TouchableOpacity> : <View style={styles.workingButton}><ActivityIndicator color="#FFFFFF" /><Text style={styles.recordText}>{phase === "trailing" ? t("trailingSilence") : t("saving")}</Text></View>}
         </View>
         <Modal animationType="slide" transparent visible={showSentencePicker} onRequestClose={() => setShowSentencePicker(false)}>
           <View style={styles.sentenceModalOverlay}>
