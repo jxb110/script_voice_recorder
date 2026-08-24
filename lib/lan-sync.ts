@@ -4,7 +4,7 @@ import { Buffer } from "buffer";
 import { Platform } from "react-native";
 import type TcpSocket from "react-native-tcp-socket/lib/types/Socket";
 
-import { LAN_SYNC_PORT, createRoomCode, createSyncCommand, parseSyncMessage, type SyncCommand, type SyncCommandName, type SyncDevice, type SyncMessage, type SyncRecordingState } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_PORT, createLanSyncAddress, createRoomCode, createSyncCommand, parseSyncMessage, type SyncCommand, type SyncCommandName, type SyncDevice, type SyncMessage, type SyncRecordingState } from "@/lib/lan-sync-protocol";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const HEARTBEAT_MS = 5_000;
@@ -30,7 +30,7 @@ export type LanSyncStatus = {
   lastCommand?: SyncCommand;
 };
 
-export type LanSyncJoinInput = { address: string; roomCode: string; projectId: string; deviceName: string };
+export type LanSyncJoinInput = { host: string; port: string | number; roomCode: string; projectId: string; deviceName: string };
 export type LanSyncHostInput = { projectId: string; deviceName: string };
 export type LanSyncStateUpdate = Pick<SyncDevice, "state" | "sentenceIndex"> & Pick<SyncDevice, "detail">;
 
@@ -74,13 +74,6 @@ function markDeviceOffline(deviceId: string) {
   replaceDevice({ ...device, detail: "offline", state: "error", updatedAt: now() });
 }
 function serverMessage(message: SyncMessage) { return JSON.stringify(message); }
-function toWsAddress(value: string) {
-  const trimmed = value.trim().replace(/\/$/, "");
-  if (!trimmed) return "";
-  if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) return trimmed;
-  return `ws://${trimmed.replace(/^https?:\/\//, "")}`;
-}
-
 export function subscribeLanSync(listener: () => void) { subscribers.add(listener); return () => { subscribers.delete(listener); }; }
 export function subscribeLanSyncCommands(listener: (command: SyncCommand) => void) { commandSubscribers.add(listener); return () => { commandSubscribers.delete(listener); }; }
 export function getLanSyncStatus() { return session; }
@@ -92,7 +85,7 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
   const ip = await Network.getIpAddressAsync();
   if (!ip || ip === "0.0.0.0") throw new Error("未能读取局域网地址。请连接同一 Wi-Fi 或开启热点后重试。");
   const self = createDevice(input.deviceName, "host");
-  session = { mode: "host", roomCode: createRoomCode(), address: `ws://${ip}:${LAN_SYNC_PORT}`, projectId: input.projectId, self, devices: [self] };
+  session = { mode: "host", roomCode: createRoomCode(), address: `${ip}:${LAN_SYNC_PORT}`, projectId: input.projectId, self, devices: [self] };
   emit();
   const tcp = getTcp();
   server = tcp.createServer(handleHostConnection);
@@ -102,7 +95,7 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
       server?.once("listening", () => { clearTimeout(timer); resolve(); });
       server?.once("error", (error: Error) => { clearTimeout(timer); reject(error); });
       server?.on("error", (error: Error) => { session = { ...session, error: error.message }; emit(); });
-      server?.listen({ port: LAN_SYNC_PORT, host: ip, reuseAddress: true });
+      server?.listen({ port: LAN_SYNC_PORT, host: "0.0.0.0", reuseAddress: true });
     });
     return session;
   } catch (error) {
@@ -113,11 +106,12 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
 
 export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus> {
   if (Platform.OS === "web") return Promise.reject(new Error("请在 Android 录音客户端中加入同步房间。"));
-  const address = toWsAddress(input.address);
-  if (!address) return Promise.reject(new Error("请输入主控端显示的局域网地址。"));
+  let address: string;
+  try { address = createLanSyncAddress(input.host, input.port); }
+  catch (error) { return Promise.reject(error instanceof Error ? error : new Error("主控地址无效。")); }
   stopLanSync();
   const self = createDevice(input.deviceName, "client");
-  session = { mode: "client", roomCode: input.roomCode.trim().toUpperCase(), address, projectId: input.projectId, self, devices: [self] };
+  session = { mode: "idle", roomCode: input.roomCode.trim().toUpperCase(), address, projectId: input.projectId, self, devices: [], error: undefined };
   emit();
   return new Promise<LanSyncStatus>((resolve, reject) => {
     let settled = false;
@@ -128,8 +122,14 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (error) { session = { ...session, error: error.message }; emit(); reject(error); }
-      else resolve(session);
+      if (error) {
+        if (client === socket) client = null;
+        if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+        session = { mode: "idle", self: idleDevice(), devices: [], error: error.message };
+        emit();
+        try { socket.close(); } catch { /* ignored */ }
+        reject(error);
+      } else resolve(session);
     };
     socket.onopen = () => {
       sendClient({ type: "hello", roomCode: session.roomCode ?? "", projectId: session.projectId ?? "", deviceId: self.id, deviceName: self.name, sentAt: now() });
@@ -139,14 +139,14 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
       const message = parseSyncMessage(typeof event.data === "string" ? event.data : String(event.data));
       if (!message) return;
       if (message.type === "welcome") {
-        session = { ...session, roomCode: message.roomCode, projectId: message.projectId, devices: message.devices, error: undefined };
+        session = { ...session, mode: "client", roomCode: message.roomCode, projectId: message.projectId, devices: message.devices, error: undefined };
         emit();
         finish();
       } else if (message.type === "command") receiveCommand(message.command);
       else if (message.type === "pong") updateClientLatency(now() - message.sentAt);
       else if (message.type === "error") finish(new Error(message.message));
     };
-    socket.onerror = () => finish(new Error("无法连接主控端。请确认两台设备处于同一局域网。"));
+    socket.onerror = () => finish(new Error("无法连接主控端。请确认主控设备已创建房间、IP 和端口正确，且两台设备处于同一局域网。"));
     socket.onclose = () => {
       if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
       if (session.mode === "client") {

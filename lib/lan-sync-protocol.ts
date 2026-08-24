@@ -1,6 +1,17 @@
 export const LAN_SYNC_PORT = 35679;
 export const LAN_SYNC_EXECUTION_LEAD_MS = 850;
 
+export function createLanSyncAddress(hostInput: string, portInput: string | number = LAN_SYNC_PORT) {
+  const rawHost = hostInput.trim().replace(/^wss?:\/\//i, "").replace(/\/.*$/, "");
+  const matchedPort = rawHost.match(/:(\d+)$/)?.[1];
+  const host = rawHost.replace(/:\d+$/, "").trim();
+  const portText = String(portInput).trim() || matchedPort || String(LAN_SYNC_PORT);
+  const port = Number(portText);
+  if (!host) throw new Error("请输入主控设备的 IP 地址。");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("请输入 1 到 65535 之间的端口号。");
+  return `ws://${host}:${port}`;
+}
+
 export type SyncRole = "host" | "client";
 export type SyncRecordingState = "idle" | "leading" | "recording" | "trailing" | "saving" | "playing" | "error";
 export type SyncCommandName = "start" | "stop" | "previous" | "next" | "play" | "rerecord";

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LAN_SYNC_EXECUTION_LEAD_MS, createProjectSyncKey, createRoomCode, createSyncCommand, parseSyncMessage } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_EXECUTION_LEAD_MS, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, parseSyncMessage } from "@/lib/lan-sync-protocol";
 
 describe("LAN sync protocol", () => {
   it("creates a short local room code", () => {
@@ -24,5 +24,11 @@ describe("LAN sync protocol", () => {
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_1", name: "stop", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "stop" } });
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_1", name: "erase-all" } }))).toBeNull();
     expect(parseSyncMessage("not json")).toBeNull();
+  });
+
+  it("creates a WebSocket endpoint from a separate host and port", () => {
+    expect(createLanSyncAddress("192.168.1.20", "35679")).toBe("ws://192.168.1.20:35679");
+    expect(createLanSyncAddress("ws://192.168.1.20:35679", "")).toBe("ws://192.168.1.20:35679");
+    expect(() => createLanSyncAddress("192.168.1.20", "70000")).toThrow("1 到 65535");
   });
 });
