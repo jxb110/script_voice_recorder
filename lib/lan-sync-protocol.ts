@@ -13,6 +13,21 @@ export function createLanSyncAddress(hostInput: string, portInput: string | numb
   return `ws://${host}:${port}`;
 }
 
+/** Normalizes native TCP payloads, including Android implementations that return bytes as "72,84,..." strings. */
+export function normalizeLanSocketChunk(chunk: string | number[] | Uint8Array | ArrayBuffer) {
+  if (typeof chunk === "string") {
+    const compact = chunk.trim();
+    if (/^(?:\d{1,3},)*\d{1,3}$/.test(compact)) {
+      const values = compact.split(",").map(Number);
+      if (values.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) return new Uint8Array(values);
+    }
+    return new TextEncoder().encode(chunk);
+  }
+  if (Array.isArray(chunk)) return new Uint8Array(chunk);
+  if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+  return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+}
+
 export type SyncRoomInvite = { host: string; port: number; roomCode: string };
 
 export function createSyncRoomInvite(address: string, roomCode: string) {

@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LAN_SYNC_EXECUTION_LEAD_MS, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_EXECUTION_LEAD_MS, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
 
 describe("LAN sync protocol", () => {
+  it("normalizes Android decimal byte-list socket payloads before parsing handshake responses", () => {
+    expect(new TextDecoder().decode(normalizeLanSocketChunk("72,84,84,80,47,49,46,49,32,49,48,49"))).toBe("HTTP/1.1 101");
+    expect(new TextDecoder().decode(normalizeLanSocketChunk("HTTP/1.1 101"))).toBe("HTTP/1.1 101");
+  });
+
   it("creates a short local room code", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.123456789);
     expect(createRoomCode()).toHaveLength(6);

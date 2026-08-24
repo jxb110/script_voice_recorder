@@ -4,7 +4,7 @@ import { Buffer } from "buffer";
 import { Platform } from "react-native";
 import type TcpSocket from "react-native-tcp-socket/lib/types/Socket";
 
-import { LAN_SYNC_PORT, createLanSyncAddress, createRoomCode, createSyncCommand, parseSyncMessage, type SyncCommand, type SyncCommandName, type SyncDevice, type SyncMessage, type SyncRecordingState } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_PORT, createLanSyncAddress, createRoomCode, createSyncCommand, normalizeLanSocketChunk, parseSyncMessage, type SyncCommand, type SyncCommandName, type SyncDevice, type SyncMessage, type SyncRecordingState } from "@/lib/lan-sync-protocol";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const HEARTBEAT_MS = 5_000;
@@ -146,7 +146,7 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
     socket.setTimeout(8_000, () => finish(new Error("连接主控端超时，请检查主控 IP、端口和局域网连接。")));
     socket.on("data", (chunk) => {
       if (!transport) return;
-      const incoming = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk);
+      const incoming = Buffer.from(normalizeLanSocketChunk(chunk));
       if (!transport.upgraded) {
         transport.handshake = Buffer.concat([transport.handshake, incoming]);
         const marker = transport.handshake.indexOf("\r\n\r\n");
@@ -282,7 +282,7 @@ function handleHostConnection(socket: TcpSocket) {
   socket.setNoDelay(true);
   socket.setTimeout(15_000, () => socket.destroy());
   socket.on("data", (chunk) => {
-    const bytes = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk);
+    const bytes = Buffer.from(normalizeLanSocketChunk(chunk));
     if (!peers.has(peer)) {
       handshake = Buffer.concat([handshake, bytes]);
       const marker = handshake.indexOf("\r\n\r\n");

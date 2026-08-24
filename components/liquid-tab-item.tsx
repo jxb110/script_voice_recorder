@@ -14,7 +14,7 @@ function useSelectionMotion(focused: boolean) {
     motion.stopAnimation();
     motion.setValue(0);
     if (!focused) return;
-    Animated.timing(motion, { duration: 610, easing: Easing.bezier(0.16, 0.86, 0.28, 1), toValue: 1, useNativeDriver: true }).start();
+    Animated.timing(motion, { duration: 760, easing: Easing.bezier(0.16, 0.86, 0.28, 1), toValue: 1, useNativeDriver: true }).start();
   }, [focused, motion]);
   return motion;
 }
@@ -22,7 +22,7 @@ function useSelectionMotion(focused: boolean) {
 function LiquidBubble({ motion, style, x, y, delay = 0 }: { motion: Animated.Value; style: object; x: number; y: number; delay?: number }) {
   const start = Math.min(0.58, 0.1 + delay);
   const opacity = motion.interpolate({ inputRange: [0, start, Math.min(0.92, start + 0.28), 1], outputRange: [0, 1, 0.84, 0] });
-  const scale = motion.interpolate({ inputRange: [0, start, Math.min(0.88, start + 0.22), 1], outputRange: [0.18, 1.28, 0.96, 0.62] });
+  const scale = motion.interpolate({ inputRange: [0, start, Math.min(0.88, start + 0.22), 1], outputRange: [0.18, 1.55, 1.08, 0.72] });
   const translateX = motion.interpolate({ inputRange: [0, 1], outputRange: [0, x] });
   const translateY = motion.interpolate({ inputRange: [0, 1], outputRange: [0, y] });
   return <Animated.View pointerEvents="none" style={[styles.bubble, style, { opacity, transform: [{ translateX }, { translateY }, { scale }] }]}><View style={styles.bubbleGlint} /></Animated.View>;
@@ -31,18 +31,18 @@ function LiquidBubble({ motion, style, x, y, delay = 0 }: { motion: Animated.Val
 export function LiquidTabIcon({ focused, color, name, size }: LiquidTabIconProps) {
   const motion = useSelectionMotion(focused);
   const dockOpacity = motion.interpolate({ inputRange: [0, 0.1, 1], outputRange: [0, 1, 1] });
-  const dockScale = motion.interpolate({ inputRange: [0, 0.18, 0.48, 1], outputRange: [0.7, 1.13, 0.96, 1] });
+  const dockScale = motion.interpolate({ inputRange: [0, 0.18, 0.48, 1], outputRange: [0.66, 1.22, 0.94, 1] });
   const iconScale = motion.interpolate({ inputRange: [0, 0.2, 0.52, 0.78, 1], outputRange: [1, 0.78, 1.12, 0.97, 1] });
   const iconRotate = motion.interpolate({ inputRange: [0, 0.2, 0.53, 0.76, 1], outputRange: ["0deg", "-8deg", "7deg", "-2deg", "0deg"] });
   const iconLift = motion.interpolate({ inputRange: [0, 0.28, 0.62, 1], outputRange: [0, 3, -4, 0] });
   const flashOpacity = motion.interpolate({ inputRange: [0, 0.11, 0.43, 1], outputRange: [0, 0.98, 0.08, 0] });
-  const flashScale = motion.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.45, 1.45, 1.75] });
+  const flashScale = motion.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.42, 1.72, 2.15] });
   return <View pointerEvents="none" style={styles.iconArea}>
     <Animated.View style={[styles.flash, { opacity: flashOpacity, transform: [{ scale: flashScale }] }]} />
-    <LiquidBubble delay={0} motion={motion} style={styles.bubbleBlue} x={20} y={-30} />
-    <LiquidBubble delay={0.08} motion={motion} style={styles.bubbleCyan} x={8} y={-39} />
-    <LiquidBubble delay={0.13} motion={motion} style={styles.bubbleViolet} x={31} y={-17} />
-    <LiquidBubble delay={0.18} motion={motion} style={styles.bubbleSilver} x={-18} y={-24} />
+    <LiquidBubble delay={0} motion={motion} style={styles.bubbleBlue} x={24} y={-35} />
+    <LiquidBubble delay={0.08} motion={motion} style={styles.bubbleCyan} x={9} y={-46} />
+    <LiquidBubble delay={0.13} motion={motion} style={styles.bubbleViolet} x={36} y={-20} />
+    <LiquidBubble delay={0.18} motion={motion} style={styles.bubbleSilver} x={-22} y={-29} />
     <Animated.View style={[styles.selectionDock, { opacity: dockOpacity, transform: [{ scale: dockScale }] }]}><View style={styles.dockGlint} /><View style={styles.dockRim} /></Animated.View>
     <Animated.View style={[styles.icon, { transform: [{ translateY: iconLift }, { rotate: iconRotate }, { scale: iconScale }] }]}><IconSymbol color={focused ? "#3558D5" : color} name={name} size={size} /></Animated.View>
   </View>;
@@ -57,18 +57,18 @@ export function LiquidTabLabel({ children, color, focused }: LiquidTabLabelProps
 }
 
 const styles = StyleSheet.create({
-  iconArea: { alignItems: "center", height: 42, justifyContent: "center", overflow: "visible", width: 64 },
-  selectionDock: { backgroundColor: "rgba(243,248,255,0.66)", borderColor: "rgba(255,255,255,0.96)", borderRadius: 18, borderWidth: 1, height: 38, position: "absolute", shadowColor: "#4168D5", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 10, width: 52 },
-  dockGlint: { backgroundColor: "rgba(255,255,255,0.86)", borderRadius: 99, height: 9, left: 8, position: "absolute", right: 8, top: 3 },
-  dockRim: { borderColor: "rgba(158,186,249,0.32)", borderRadius: 15, borderWidth: 1, bottom: 3, left: 3, position: "absolute", right: 3, top: 3 },
+  iconArea: { alignItems: "center", height: 48, justifyContent: "center", overflow: "visible", width: 70 },
+  selectionDock: { backgroundColor: "rgba(238,246,255,0.82)", borderColor: "rgba(255,255,255,0.98)", borderRadius: 23, borderWidth: 1, height: 46, position: "absolute", shadowColor: "#4168D5", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.28, shadowRadius: 14, width: 62 },
+  dockGlint: { backgroundColor: "rgba(255,255,255,0.95)", borderRadius: 99, height: 11, left: 9, position: "absolute", right: 9, top: 4 },
+  dockRim: { borderColor: "rgba(117,167,255,0.42)", borderRadius: 20, borderWidth: 1, bottom: 3, left: 3, position: "absolute", right: 3, top: 3 },
   icon: { alignItems: "center", justifyContent: "center", zIndex: 2 },
-  flash: { backgroundColor: "rgba(169,203,255,0.78)", borderRadius: 26, height: 46, position: "absolute", width: 46 },
+  flash: { backgroundColor: "rgba(137,190,255,0.88)", borderRadius: 34, height: 62, position: "absolute", width: 62 },
   bubble: { borderColor: "rgba(255,255,255,0.97)", borderWidth: 1.35, elevation: 7, overflow: "hidden", position: "absolute", shadowColor: "#355DD4", shadowOpacity: 0.42, shadowRadius: 7, zIndex: 5 },
   bubbleGlint: { backgroundColor: "rgba(255,255,255,0.74)", borderRadius: 99, height: 4, left: 3, position: "absolute", right: 3, top: 2 },
-  bubbleBlue: { backgroundColor: "#397CFF", borderRadius: 8, height: 16, right: 7, top: 0, width: 16 },
-  bubbleCyan: { backgroundColor: "#24D8E4", borderRadius: 7, height: 13, right: 17, top: -7, width: 13 },
-  bubbleViolet: { backgroundColor: "#9A76FF", borderRadius: 7.5, height: 15, right: -3, top: 12, width: 15 },
-  bubbleSilver: { backgroundColor: "#74B6FF", borderRadius: 6, height: 12, left: 8, top: 8, width: 12 },
+  bubbleBlue: { backgroundColor: "#397CFF", borderRadius: 10, height: 20, right: 5, top: -1, width: 20 },
+  bubbleCyan: { backgroundColor: "#24D8E4", borderRadius: 8.5, height: 17, right: 17, top: -9, width: 17 },
+  bubbleViolet: { backgroundColor: "#9A76FF", borderRadius: 9, height: 18, right: -5, top: 14, width: 18 },
+  bubbleSilver: { backgroundColor: "#74B6FF", borderRadius: 7.5, height: 15, left: 6, top: 8, width: 15 },
   label: { alignSelf: "stretch", fontSize: 12, fontWeight: "700", includeFontPadding: false, lineHeight: 17, marginBottom: 1, minWidth: 58, paddingHorizontal: 2, textAlign: "center" },
   labelFocused: { fontWeight: "900", textShadowColor: "rgba(100,144,255,0.25)", textShadowRadius: 5 },
 });
