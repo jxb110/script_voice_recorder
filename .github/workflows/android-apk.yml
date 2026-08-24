@@ -18,11 +18,9 @@ jobs:
     name: Build APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     env:
-      NODE_ENV: production
-      NODE_OPTIONS: --max-old-space-size=1536
-      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=1024m
+      NODE_OPTIONS: --max-old-space-size=4096
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m
 
     steps:
       - name: Check out source
@@ -44,11 +42,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
-          cache: gradle
-
-      - name: Set up Gradle cache
-        uses: gradle/actions/setup-gradle@v4
+          java-version: "17"
 
       - name: Set Android version code
         run: echo "ANDROID_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
@@ -69,13 +63,17 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install --clean
 
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Build release APK
         working-directory: android
         run: |
           ./gradlew :app:assembleRelease \
             --no-daemon \
-            --max-workers=1 \
-            -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=1024m"
+            --max-workers=2 \
+            --build-cache \
+            -Dorg.gradle.jvmargs="-Xmx3072m -XX:MaxMetaspaceSize=1024m"
 
       - name: Verify and prepare APK artifact
         id: apk
@@ -83,7 +81,7 @@ jobs:
           set -euo pipefail
           APK_SOURCE="android/app/build/outputs/apk/release/app-release.apk"
           SHORT_SHA="${GITHUB_SHA::7}"
-          APK_NAME="script_voice_recorder-v2.0.0-${SHORT_SHA}.apk"
+          APK_NAME="script_voice_recorder-v3.0.0-${SHORT_SHA}.apk"
           mkdir -p dist
           cp "$APK_SOURCE" "dist/$APK_NAME"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "dist/$APK_NAME" | head -n 1 | tee dist/apk-metadata.txt
@@ -101,9 +99,9 @@ jobs:
             echo
             echo "| Item | Value |"
             echo "|---|---|"
-            echo "| Commit | \\`${{ steps.apk.outputs.short_sha }}\\` |"
-            echo "| Version | \\`2.0.0 ($ANDROID_VERSION_CODE)\\` |"
-            echo "| APK | \\`${{ steps.apk.outputs.apk_name }}\\` |"
+            echo "| Commit | \`${{ steps.apk.outputs.short_sha }}\` |"
+            echo "| Version | \`3.0.0 ($ANDROID_VERSION_CODE)\` |"
+            echo "| APK | \`${{ steps.apk.outputs.apk_name }}\` |"
             echo
             echo '```text'
             cat dist/apk-sha256.txt
@@ -113,7 +111,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: script-voice-recorder-v2.0.0-${{ steps.apk.outputs.short_sha }}
+          name: script-voice-recorder-v3.0.0-${{ steps.apk.outputs.short_sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 14
