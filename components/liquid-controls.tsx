@@ -43,10 +43,15 @@ export function LiquidSegment({ labels, selectedIndex, onSelect }: LiquidSegment
 type LiquidSliderProps = ComponentProps<typeof Slider> & { containerStyle?: StyleProp<ViewStyle> };
 
 export function LiquidSlider({ containerStyle, style, ...props }: LiquidSliderProps) {
+  const minimum = props.minimumValue ?? 0;
+  const maximum = props.maximumValue ?? 100;
+  const value = props.value ?? minimum;
+  const progress = Math.max(0, Math.min(1, (value - minimum) / Math.max(1, maximum - minimum)));
   return <View style={[styles.sliderShell, style, containerStyle]}>
-    <LinearGradient pointerEvents="none" colors={["rgba(85,118,216,0.92)", "rgba(114,223,241,0.9)"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={styles.sliderLiquid} />
-    <View pointerEvents="none" style={styles.sliderShine} />
-    <Slider {...props} maximumTrackTintColor="rgba(130,151,197,0.26)" minimumTrackTintColor="rgba(79,110,232,0.92)" style={styles.slider} thumbTintColor="#FFFFFF" />
+    <View pointerEvents="none" style={styles.sliderTrack} />
+    <LinearGradient pointerEvents="none" colors={["#3153BE", "#5A78E8"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={[styles.sliderLiquid, { right: `${100 - progress * 100}%` }]} />
+    <View pointerEvents="none" style={[styles.sliderShine, { right: `${Math.max(0, 100 - progress * 100 + 4)}%` }]} />
+    <Slider {...props} maximumTrackTintColor="transparent" minimumTrackTintColor="transparent" style={styles.slider} thumbTintColor="#29489E" />
   </View>;
 }
 
@@ -64,8 +69,9 @@ const styles = StyleSheet.create({
   segmentGlint: { backgroundColor: "rgba(255,255,255,0.68)", borderRadius: 10, height: 11, left: 5, position: "absolute", right: 5, top: -3 },
   segmentText: { color: "#65769A", fontSize: 12, fontWeight: "800" },
   segmentTextActive: { color: "#3E60CE", fontWeight: "900" },
-  sliderShell: { height: 34, justifyContent: "center", overflow: "visible", position: "relative" },
-  sliderLiquid: { borderRadius: 99, height: 7, left: 0, position: "absolute", right: "52%" },
-  sliderShine: { backgroundColor: "rgba(255,255,255,0.72)", borderRadius: 99, height: 2, left: 5, position: "absolute", right: "54%", top: 11 },
-  slider: { height: 34, width: "100%" },
+  sliderShell: { height: 46, justifyContent: "center", overflow: "visible", position: "relative" },
+  sliderTrack: { backgroundColor: "rgba(139,160,207,0.38)", borderColor: "rgba(255,255,255,0.76)", borderRadius: 99, borderWidth: 1, height: 10, left: 0, position: "absolute", right: 0 },
+  sliderLiquid: { borderRadius: 99, height: 8, left: 1, position: "absolute" },
+  sliderShine: { backgroundColor: "rgba(255,255,255,0.58)", borderRadius: 99, height: 2, left: 6, position: "absolute", top: 16 },
+  slider: { height: 46, width: "100%" },
 });

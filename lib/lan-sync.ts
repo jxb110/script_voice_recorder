@@ -307,14 +307,15 @@ function handleHostConnection(socket: TcpSocket) {
 }
 
 async function completeHandshake(peer: Peer, header: string, remainder: Buffer) {
-  const lines = header.split("\r\n");
+  const lines = header.split(/\r?\n/);
   const first = lines.shift() ?? "";
   const headers = new Map(lines.map((line) => { const split = line.indexOf(":"); return [split < 0 ? "" : line.slice(0, split).trim().toLowerCase(), split < 0 ? "" : line.slice(split + 1).trim()]; }));
   const key = headers.get("sec-websocket-key");
-  if (!first.startsWith("GET ") || !key) { peer.socket.end("HTTP/1.1 400 Bad Request\r\nX-Script-Sync-Error: missing-websocket-upgrade\r\nConnection: close\r\n\r\n"); return; }
+  if (!first.startsWith("GET ")) { peer.socket.end("HTTP/1.1 400 Bad Request\r\nX-Script-Sync-Error: malformed-request-line\r\nConnection: close\r\n\r\n"); return; }
   try {
-    const accept = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, `${key}${WS_GUID}`, { encoding: Crypto.CryptoEncoding.BASE64 });
-    peer.socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+    const accept = key ? await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, `${key}${WS_GUID}`, { encoding: Crypto.CryptoEncoding.BASE64 }) : "script-recorder-native-compat";
+    const compatibilityHeader = key ? "" : "X-Script-Sync-Mode: native-tcp-compat\r\n";
+    peer.socket.write(Buffer.from(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n${compatibilityHeader}\r\n`, "utf8"));
     peer.socket.setTimeout(0);
     peers.add(peer);
     if (remainder.length) consumeFrames(peer, remainder);
