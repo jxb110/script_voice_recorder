@@ -35,9 +35,9 @@ export default function HomeScreen() {
         <View style={styles.stat}><Text style={styles.statNumber}>{speakers.length}</Text><Text style={styles.statLabel}>{t("speakers")}</Text></View>
       </GlassSurface>
       <LiquidGlassButton onPress={() => router.push("/new-project" as never)} style={styles.primary}>
-        <View style={styles.primaryTap}>
+        <View style={[styles.primaryTap, layoutFix.primaryTap]}>
           <View style={styles.primaryIcon}><MaterialIcons color="#3656B7" name="add" size={23} /></View>
-          <View style={styles.primaryCopy}><Text style={styles.primaryTitle}>{t("newTask")}</Text><Text style={styles.primaryHint}>{t("selectSpeakerAndImport")}</Text></View>
+          <View style={[styles.primaryCopy, layoutFix.primaryCopy]}><Text style={[styles.primaryTitle, layoutFix.primaryTitle]}>{t("newTask")}</Text><Text style={[styles.primaryHint, layoutFix.primaryHint]}>{t("selectSpeakerAndImport")}</Text></View>
           <MaterialIcons color="#FFFFFF" name="arrow-forward" size={21} />
         </View>
       </LiquidGlassButton>
@@ -58,4 +58,11 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", paddingTop: 12 }, headerCopy: { flex: 1, minWidth: 0, paddingRight: 12 }, eyebrow: { color: "#61749E", fontSize: 12, fontWeight: "800", letterSpacing: 0.8 }, title: { color: "#182B55", fontSize: 32, fontWeight: "900", letterSpacing: -0.8, marginTop: 3 }, subtitle: { color: "#61749E", flexShrink: 1, fontSize: 14, lineHeight: 19, marginTop: 5 }, speakerButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.62)", borderColor: "rgba(255,255,255,0.92)", borderRadius: 18, borderWidth: 1, elevation: 3, flexShrink: 0, height: 48, justifyContent: "center", marginTop: 3, shadowColor: "#5B78AD", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.13, shadowRadius: 13, width: 48 }, stats: { alignItems: "center", borderRadius: 22, flexDirection: "row", justifyContent: "space-between", marginTop: 24, paddingHorizontal: 10, paddingVertical: 16 }, stat: { alignItems: "center", flex: 1 }, statNumber: { color: "#182B55", fontSize: 22, fontWeight: "900" }, statTotal: { color: "#7D8CAB", fontSize: 13, fontWeight: "700" }, statLabel: { color: "#61749E", fontSize: 12, marginTop: 4 }, statDivider: { backgroundColor: "rgba(119,145,196,0.2)", height: 35, width: 1 }, primary: { borderColor: "rgba(255,255,255,0.78)", borderRadius: 22, borderWidth: 1, marginTop: 16, overflow: "hidden", shadowColor: "#3A5CB3", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.22, shadowRadius: 20 }, primaryTap: { alignItems: "center", flexDirection: "row", gap: 12, padding: 15 }, primaryIcon: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.86)", borderRadius: 14, height: 43, justifyContent: "center", width: 43 }, primaryCopy: { flex: 1 }, primaryTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" }, primaryHint: { color: "#E9EEFF", fontSize: 12, marginTop: 4 }, sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 11, marginTop: 25 }, sectionTitle: { color: "#182B55", fontSize: 18, fontWeight: "900" }, viewAll: { color: "#4669DE", fontSize: 13, fontWeight: "800" }, list: { gap: 10, paddingBottom: 24 }, emptyList: { flexGrow: 1, justifyContent: "center", paddingBottom: 100 }, project: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.56)", borderColor: "rgba(255,255,255,0.86)", borderRadius: 19, borderWidth: 1, elevation: 2, flexDirection: "row", gap: 12, padding: 14, shadowColor: "#6380B7", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 14 }, projectIcon: { alignItems: "center", backgroundColor: "rgba(224,235,255,0.86)", borderRadius: 13, height: 44, justifyContent: "center", width: 44 }, projectIconDone: { backgroundColor: "rgba(212,244,227,0.92)" }, projectCopy: { flex: 1 }, projectName: { color: "#182B55", fontSize: 15, fontWeight: "800" }, projectMeta: { color: "#61749E", fontSize: 12, marginTop: 5 }, empty: { alignItems: "center", paddingHorizontal: 27 }, emptyTitle: { color: "#182B55", fontSize: 19, fontWeight: "900", marginTop: 14 }, emptyText: { color: "#61749E", fontSize: 14, lineHeight: 22, marginTop: 7, textAlign: "center" },
+});
+
+const layoutFix = StyleSheet.create({
+  primaryTap: { minHeight: 72, paddingVertical: 12 },
+  primaryCopy: { justifyContent: "center", minHeight: 44 },
+  primaryTitle: { includeFontPadding: false, lineHeight: 21, paddingTop: 1 },
+  primaryHint: { includeFontPadding: false, lineHeight: 17, marginTop: 3, paddingBottom: 1 },
 });

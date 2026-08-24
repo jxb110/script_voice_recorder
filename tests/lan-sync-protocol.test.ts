@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LAN_SYNC_EXECUTION_LEAD_MS, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, parseSyncMessage } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_EXECUTION_LEAD_MS, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
 
 describe("LAN sync protocol", () => {
   it("creates a short local room code", () => {
@@ -30,5 +30,11 @@ describe("LAN sync protocol", () => {
     expect(createLanSyncAddress("192.168.1.20", "35679")).toBe("ws://192.168.1.20:35679");
     expect(createLanSyncAddress("ws://192.168.1.20:35679", "")).toBe("ws://192.168.1.20:35679");
     expect(() => createLanSyncAddress("192.168.1.20", "70000")).toThrow("1 到 65535");
+  });
+
+  it("round-trips a QR room invitation without exposing a WebSocket prefix", () => {
+    const invite = createSyncRoomInvite("192.168.1.20:35679", "AB12CD");
+    expect(parseSyncRoomInvite(invite)).toEqual({ host: "192.168.1.20", port: 35679, roomCode: "AB12CD" });
+    expect(parseSyncRoomInvite("not-an-invite")).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 export const LAN_SYNC_PORT = 35679;
 export const LAN_SYNC_EXECUTION_LEAD_MS = 850;
+const SYNC_INVITE_TYPE = "script-recorder-sync";
 
 export function createLanSyncAddress(hostInput: string, portInput: string | number = LAN_SYNC_PORT) {
   const rawHost = hostInput.trim().replace(/^wss?:\/\//i, "").replace(/\/.*$/, "");
@@ -10,6 +11,29 @@ export function createLanSyncAddress(hostInput: string, portInput: string | numb
   if (!host) throw new Error("请输入主控设备的 IP 地址。");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("请输入 1 到 65535 之间的端口号。");
   return `ws://${host}:${port}`;
+}
+
+export type SyncRoomInvite = { host: string; port: number; roomCode: string };
+
+export function createSyncRoomInvite(address: string, roomCode: string) {
+  const normalized = createLanSyncAddress(address, "").replace(/^ws:\/\//, "");
+  const separator = normalized.lastIndexOf(":");
+  const host = normalized.slice(0, separator);
+  const port = Number(normalized.slice(separator + 1));
+  if (!/^[A-Z0-9]{4,12}$/.test(roomCode.trim().toUpperCase())) throw new Error("房间口令无效。");
+  return JSON.stringify({ type: SYNC_INVITE_TYPE, version: 1, host, port, roomCode: roomCode.trim().toUpperCase() });
+}
+
+export function parseSyncRoomInvite(raw: string): SyncRoomInvite | null {
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    if (value.type !== SYNC_INVITE_TYPE || value.version !== 1 || !isString(value.host) || !isNumber(value.port) || !isString(value.roomCode)) return null;
+    createLanSyncAddress(value.host, value.port);
+    const roomCode = value.roomCode.trim().toUpperCase();
+    return /^[A-Z0-9]{4,12}$/.test(roomCode) ? { host: value.host, port: value.port, roomCode } : null;
+  } catch {
+    return null;
+  }
 }
 
 export type SyncRole = "host" | "client";

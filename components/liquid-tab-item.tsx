@@ -69,6 +69,6 @@ const styles = StyleSheet.create({
   bubbleCyan: { backgroundColor: "#24D8E4", borderRadius: 7, height: 13, right: 17, top: -7, width: 13 },
   bubbleViolet: { backgroundColor: "#9A76FF", borderRadius: 7.5, height: 15, right: -3, top: 12, width: 15 },
   bubbleSilver: { backgroundColor: "#74B6FF", borderRadius: 6, height: 12, left: 8, top: 8, width: 12 },
-  label: { fontSize: 11, fontWeight: "700", lineHeight: 14, marginBottom: 1 },
+  label: { alignSelf: "stretch", fontSize: 12, fontWeight: "700", includeFontPadding: false, lineHeight: 17, marginBottom: 1, minWidth: 58, paddingHorizontal: 2, textAlign: "center" },
   labelFocused: { fontWeight: "900", textShadowColor: "rgba(100,144,255,0.25)", textShadowRadius: 5 },
 });

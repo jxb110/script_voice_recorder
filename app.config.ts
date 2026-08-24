@@ -39,12 +39,12 @@ const env = {
 };
 
 const androidVersionCode = Number.parseInt(
-  process.env.ANDROID_VERSION_CODE ?? "3",
+  process.env.ANDROID_VERSION_CODE ?? "4",
   10,
 );
-if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 3) {
+if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 4) {
   throw new Error(
-    "ANDROID_VERSION_CODE must be a safe integer greater than or equal to 3.",
+    "ANDROID_VERSION_CODE must be a safe integer greater than or equal to 4.",
   );
 }
 
@@ -82,6 +82,7 @@ const config: ExpoConfig = {
       "INTERNET",
       "ACCESS_NETWORK_STATE",
       "ACCESS_WIFI_STATE",
+      "CAMERA",
       "MANAGE_EXTERNAL_STORAGE",
       "READ_EXTERNAL_STORAGE",
       "WRITE_EXTERNAL_STORAGE",
@@ -107,6 +108,12 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-camera",
+      {
+        cameraPermission: "Allow $(PRODUCT_NAME) to scan sync room QR codes.",
+      },
+    ],
     "expo-localization",
     [
       "expo-media-library",
