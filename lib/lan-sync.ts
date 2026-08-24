@@ -20,8 +20,8 @@ type TcpFactory = {
   createConnection: (options: { connectTimeout?: number; host: string; interface?: "wifi"; port: number }, callback: () => void) => TcpSocket;
 };
 type SyncMode = "idle" | "host" | "client";
-type Peer = { socket: TcpSocket; buffer: Buffer; deviceId?: string };
-type ClientTransport = { socket: TcpSocket; buffer: Buffer; handshake: Buffer; upgraded: boolean };
+type Peer = { socket: TcpSocket; buffer: Buffer; lineBuffer: string; nativeLine: boolean; deviceId?: string };
+type ClientTransport = { socket: TcpSocket; buffer: Buffer; handshake: Buffer; lineBuffer: string; nativeLine: boolean; upgraded: boolean };
 
 export type LanSyncStatus = {
   mode: SyncMode;
@@ -136,12 +136,12 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
     };
     let socket!: TcpSocket;
     socket = tcp.createConnection({ connectTimeout: 7_000, host: endpoint.host, interface: "wifi", port: endpoint.port }, () => {
-      transport = { socket, buffer: Buffer.alloc(0), handshake: Buffer.alloc(0), upgraded: false };
+      transport = { socket, buffer: Buffer.alloc(0), handshake: Buffer.alloc(0), lineBuffer: "", nativeLine: true, upgraded: false };
       client = transport;
       socket.setNoDelay(true);
       socket.setKeepAlive(true);
       const key = Buffer.from(Crypto.randomUUID(), "utf8").toString("base64");
-      socket.write(Buffer.from(`GET /sync HTTP/1.1\r\nHost: ${endpoint.host}:${endpoint.port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`, "utf8"));
+      socket.write(`GET /sync HTTP/1.1\r\nHost: ${endpoint.host}:${endpoint.port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\nX-Script-Sync-Transport: native-line\r\n\r\n`);
     });
     socket.setTimeout(8_000, () => finish(new Error("连接主控端超时，请检查主控 IP、端口和局域网连接。")));
     socket.on("data", (chunk) => {
@@ -161,14 +161,19 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
           finish(new Error(`主控端拒绝连接：${status}${reason ? `（${reason}）` : ""}。${hint}`));
           return;
         }
+        transport.nativeLine = /x-script-sync-transport:\s*native-line/i.test(response);
         transport.upgraded = true;
         sendClient({ type: "hello", roomCode: session.roomCode ?? "", projectId: session.projectId ?? "", deviceId: self.id, deviceName: self.name, sentAt: now() });
         const remainder = transport.handshake.subarray(marker + 4);
         transport.handshake = Buffer.alloc(0);
-        if (remainder.length) consumeClientFrames(transport, remainder, (message) => handleClientMessage(message, finish));
+        if (remainder.length) {
+          if (transport.nativeLine) consumeClientLines(transport, remainder, (message) => handleClientMessage(message, finish));
+          else consumeClientFrames(transport, remainder, (message) => handleClientMessage(message, finish));
+        }
         return;
       }
-      consumeClientFrames(transport, incoming, (message) => handleClientMessage(message, finish));
+      if (transport.nativeLine) consumeClientLines(transport, incoming, (message) => handleClientMessage(message, finish));
+      else consumeClientFrames(transport, incoming, (message) => handleClientMessage(message, finish));
     });
     socket.on("error", (error) => finish(new Error(`无法连接主控端：${error.message || "请确认主控已创建房间、IP 和端口正确，并处于同一局域网。"}`)));
     socket.on("close", () => {
@@ -248,6 +253,17 @@ function handleClientMessage(message: SyncMessage, finish: JoinFinish) {
   else if (message.type === "error") finish(new Error(message.message));
 }
 
+function consumeClientLines(transport: ClientTransport, incoming: Buffer, onMessage: (message: SyncMessage) => void) {
+  transport.lineBuffer += incoming.toString("utf8");
+  let newline = transport.lineBuffer.indexOf("\n");
+  while (newline >= 0) {
+    const raw = transport.lineBuffer.slice(0, newline).trim();
+    transport.lineBuffer = transport.lineBuffer.slice(newline + 1);
+    if (raw) { const message = parseSyncMessage(raw); if (message) onMessage(message); }
+    newline = transport.lineBuffer.indexOf("\n");
+  }
+}
+
 function consumeClientFrames(transport: ClientTransport, incoming: Buffer, onMessage: (message: SyncMessage) => void) {
   transport.buffer = Buffer.concat([transport.buffer, incoming]);
   while (transport.buffer.length >= 2) {
@@ -273,7 +289,9 @@ function consumeClientFrames(transport: ClientTransport, incoming: Buffer, onMes
 }
 
 function sendClient(message: SyncMessage) {
-  if (client?.upgraded && !client.socket.destroyed) sendFrame(client.socket, Buffer.from(serverMessage(message), "utf8"), 0x1, true);
+  if (!client?.upgraded || client.socket.destroyed) return;
+  if (client.nativeLine) client.socket.write(`${serverMessage(message)}\n`);
+  else sendFrame(client.socket, Buffer.from(serverMessage(message), "utf8"), 0x1, true);
 }
 
 function broadcast(message: SyncMessage) {
@@ -285,7 +303,7 @@ function broadcastWelcome() {
 }
 
 function handleHostConnection(socket: TcpSocket) {
-  const peer: Peer = { socket, buffer: Buffer.alloc(0) };
+  const peer: Peer = { socket, buffer: Buffer.alloc(0), lineBuffer: "", nativeLine: false };
   let handshake = Buffer.alloc(0);
   socket.setNoDelay(true);
   socket.setTimeout(15_000, () => socket.destroy());
@@ -300,7 +318,8 @@ function handleHostConnection(socket: TcpSocket) {
       void completeHandshake(peer, header, rest);
       return;
     }
-    consumeFrames(peer, bytes);
+    if (peer.nativeLine) consumePeerLines(peer, bytes);
+    else consumeFrames(peer, bytes);
   });
   socket.on("close", () => { if (peer.deviceId) markDeviceOffline(peer.deviceId); peers.delete(peer); broadcastWelcome(); });
   socket.on("error", () => { /* individual device errors are surfaced as offline state */ });
@@ -311,15 +330,28 @@ async function completeHandshake(peer: Peer, header: string, remainder: Buffer) 
   const first = lines.shift() ?? "";
   const headers = new Map(lines.map((line) => { const split = line.indexOf(":"); return [split < 0 ? "" : line.slice(0, split).trim().toLowerCase(), split < 0 ? "" : line.slice(split + 1).trim()]; }));
   const key = headers.get("sec-websocket-key");
+  peer.nativeLine = headers.get("x-script-sync-transport") === "native-line";
   if (!first.startsWith("GET ")) { peer.socket.end("HTTP/1.1 400 Bad Request\r\nX-Script-Sync-Error: malformed-request-line\r\nConnection: close\r\n\r\n"); return; }
   try {
     const accept = key ? await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, `${key}${WS_GUID}`, { encoding: Crypto.CryptoEncoding.BASE64 }) : "script-recorder-native-compat";
     const compatibilityHeader = key ? "" : "X-Script-Sync-Mode: native-tcp-compat\r\n";
-    peer.socket.write(Buffer.from(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n${compatibilityHeader}\r\n`, "utf8"));
+    const transportHeader = peer.nativeLine ? "X-Script-Sync-Transport: native-line\r\n" : "";
+    peer.socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n${compatibilityHeader}${transportHeader}\r\n`);
     peer.socket.setTimeout(0);
     peers.add(peer);
-    if (remainder.length) consumeFrames(peer, remainder);
+    if (remainder.length) { if (peer.nativeLine) consumePeerLines(peer, remainder); else consumeFrames(peer, remainder); }
   } catch { peer.socket.destroy(); }
+}
+
+function consumePeerLines(peer: Peer, incoming: Buffer) {
+  peer.lineBuffer += incoming.toString("utf8");
+  let newline = peer.lineBuffer.indexOf("\n");
+  while (newline >= 0) {
+    const raw = peer.lineBuffer.slice(0, newline).trim();
+    peer.lineBuffer = peer.lineBuffer.slice(newline + 1);
+    if (raw) { const message = parseSyncMessage(raw); if (message) handleHostMessage(peer, message); }
+    newline = peer.lineBuffer.indexOf("\n");
+  }
 }
 
 function consumeFrames(peer: Peer, incoming: Buffer) {
@@ -360,7 +392,10 @@ function handleHostMessage(peer: Peer, message: SyncMessage) {
   } else if (message.type === "ping") sendPeer(peer, { type: "pong", sentAt: message.sentAt });
 }
 
-function sendPeer(peer: Peer, message: SyncMessage) { sendFrame(peer.socket, Buffer.from(serverMessage(message), "utf8"), 0x1); }
+function sendPeer(peer: Peer, message: SyncMessage) {
+  if (peer.nativeLine) peer.socket.write(`${serverMessage(message)}\n`);
+  else sendFrame(peer.socket, Buffer.from(serverMessage(message), "utf8"), 0x1);
+}
 function sendFrame(socket: TcpSocket, payload: Buffer, opcode: number, masked = false) {
   const length = payload.length;
   const lengthHead = length < 126 ? [length] : [126, (length >> 8) & 0xff, length & 0xff];
