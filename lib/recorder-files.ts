@@ -46,11 +46,16 @@ function parseTxtJsonLine(line: string, lineNumber: number) {
   return makeSentence(lineNumber, tokenText(tokens), prompt, tokens);
 }
 
+/** Converts every common text line ending to LF before script validation or splitting. */
+export function normalizeScriptLineEndings(content: string) {
+  return content.replace(/^\uFEFF/, "").replace(/\r\n|\r|\n/g, "\n");
+}
+
 export function parseScriptContent(content: string, fileName: string): ScriptSentence[] {
   if (!fileName.toLowerCase().endsWith(".txt")) throw new Error("仅支持 TXT 脚本文件。每一行应为一个 JSON 字元数组。");
-  const normalized = content.replace(/^\uFEFF/, "").trim();
+  const normalized = normalizeScriptLineEndings(content).trim();
   if (!normalized) throw new Error("脚本文件为空，请至少保留一行 JSON 字元数组。");
-  const rows = normalized.split(/\r?\n/).filter((line) => line.trim());
+  const rows = normalized.split("\n").filter((line) => line.trim());
   return rows.map((line, index) => parseTxtJsonLine(line, index + 1));
 }
 

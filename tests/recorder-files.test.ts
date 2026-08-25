@@ -12,6 +12,7 @@ vi.mock("expo-media-library", () => ({
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 
 import { getPublicAudioAlbumName, parseScriptContent } from "@/lib/recorder-files";
+import { createProjectSyncKey } from "@/lib/lan-sync-protocol";
 
 const makeLine = (label: string, prompt: string) => JSON.stringify([
   { char: `你${label}`, pinyin: "nǐ" },
@@ -28,6 +29,13 @@ describe("逐行 JSON TXT 脚本", () => {
     expect(sentences.map((sentence) => sentence.rawText)).toEqual(["你1好世界", "你2好世界", "你3好世界"]);
     expect(sentences.map((sentence) => sentence.prompt)).toEqual(["提示词1", "提示词2", "提示词3"]);
     expect(sentences[0].tokens).toEqual([{ char: "你1", pinyin: "nǐ" }, { char: "好", pinyin: "hǎo" }, { char: "世", pinyin: "shì" }, { char: "界", pinyin: "jiè" }]);
+  });
+
+  it("将 LF、CRLF 与 CR 换行格式解析为相同脚本和同步任务键", () => {
+    const lines = [makeLine("1", "提示词1"), makeLine("2", "提示词2")];
+    const parsed = ["\n", "\r\n", "\r"].map((lineEnding) => parseScriptContent(lines.join(lineEnding), "sample.txt"));
+    expect(parsed.map((sentences) => sentences.map((sentence) => sentence.rawText))).toEqual([["你1好世界", "你2好世界"], ["你1好世界", "你2好世界"], ["你1好世界", "你2好世界"]]);
+    expect(new Set(parsed.map((sentences) => createProjectSyncKey("sample.txt", sentences))).size).toBe(1);
   });
 
   it("拒绝不是 TXT 的脚本文件", () => {

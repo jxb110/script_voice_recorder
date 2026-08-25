@@ -103,6 +103,19 @@ export type SyncDevice = {
   detail?: string;
 };
 
+function normalizeScriptKeyText(value: string) {
+  return value.normalize("NFC").replace(/\r\n|\r|\n/g, "\n").trim();
+}
+
+function stableKeyChecksum(value: string) {
+  let checksum = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    checksum ^= value.charCodeAt(index);
+    checksum = Math.imul(checksum, 16777619);
+  }
+  return (checksum >>> 0).toString(16).padStart(8, "0");
+}
+
 export type SyncMessage =
   | { type: "hello"; roomCode: string; projectId: string; deviceId: string; deviceName: string; sentAt: number }
   | { type: "welcome"; roomCode: string; projectId: string; serverTime: number; devices: SyncDevice[] }
@@ -117,10 +130,9 @@ export function createRoomCode() {
 }
 
 export function createProjectSyncKey(sourceFileName: string, sentences: Array<{ rawText: string; tokens: Array<{ char: string }> }>) {
-  const first = sentences.at(0);
-  const last = sentences.at(-1);
-  const toText = (sentence?: { rawText: string; tokens: Array<{ char: string }> }) => (sentence?.rawText || sentence?.tokens.map((token) => token.char).join("") || "").slice(0, 48);
-  return `${sourceFileName.trim().toLowerCase()}|${sentences.length}|${toText(first)}|${toText(last)}`;
+  const source = normalizeScriptKeyText(sourceFileName).toLowerCase();
+  const text = sentences.map((sentence) => normalizeScriptKeyText(sentence.rawText || sentence.tokens.map((token) => token.char).join(""))).join("\u241E");
+  return `v3|${source}|${sentences.length}|${stableKeyChecksum(text)}`;
 }
 
 export function createSyncCommand(input: Omit<SyncCommand, "id" | "issuedAt" | "executeAt">, now = Date.now()): SyncCommand {

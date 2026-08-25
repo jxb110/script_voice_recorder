@@ -33,6 +33,12 @@ describe("LAN sync protocol", () => {
     expect(createProjectSyncKey("sample.txt", sentences)).toBe(createProjectSyncKey(" SAMPLE.TXT ", sentences));
   });
 
+  it("normalizes all common line endings before deriving a room key", () => {
+    const tokens = [{ char: "你" }, { char: "好" }];
+    const keys = ["第一句\n第二句", "第一句\r\n第二句", "第一句\r第二句"].map((rawText) => createProjectSyncKey("sample.txt", [{ rawText, tokens }]));
+    expect(new Set(keys).size).toBe(1);
+  });
+
   it("accepts complete commands and rejects malformed network payloads", () => {
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_1", name: "complete", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "complete" } });
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_2", name: "cancel", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "cancel" } });
