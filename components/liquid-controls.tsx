@@ -1,7 +1,8 @@
-import Slider from "@react-native-community/slider";
 import { LinearGradient } from "expo-linear-gradient";
-import { type ComponentProps, type PropsWithChildren, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { type PropsWithChildren, useMemo, useRef, useState } from "react";
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+
+import { resolveLiquidSliderValue } from "@/lib/liquid-slider";
 
 type LiquidButtonProps = PropsWithChildren<{
   onPress?: () => void;
@@ -40,18 +41,44 @@ export function LiquidSegment({ labels, selectedIndex, onSelect }: LiquidSegment
   })}</View>;
 }
 
-type LiquidSliderProps = ComponentProps<typeof Slider> & { containerStyle?: StyleProp<ViewStyle> };
+type LiquidSliderProps = {
+  accessibilityLabel?: string;
+  containerStyle?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  maximumValue?: number;
+  minimumValue?: number;
+  onSlidingComplete?: (value: number) => void;
+  onValueChange?: (value: number) => void;
+  step?: number;
+  style?: StyleProp<ViewStyle>;
+  value?: number;
+};
 
-export function LiquidSlider({ containerStyle, style, ...props }: LiquidSliderProps) {
-  const minimum = props.minimumValue ?? 0;
-  const maximum = props.maximumValue ?? 100;
-  const value = props.value ?? minimum;
-  const progress = Math.max(0, Math.min(1, (value - minimum) / Math.max(1, maximum - minimum)));
-  return <View style={[styles.sliderShell, style, containerStyle]}>
+export function LiquidSlider({ accessibilityLabel, containerStyle, disabled = false, maximumValue = 100, minimumValue = 0, onSlidingComplete, onValueChange, step = 1, style, value = minimumValue }: LiquidSliderProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const press = useRef(new Animated.Value(0)).current;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const progress = Math.max(0, Math.min(1, (value - minimumValue) / Math.max(0.0001, maximumValue - minimumValue)));
+  const changeAt = (position: number) => {
+    const next = resolveLiquidSliderValue(position, trackWidth, minimumValue, maximumValue, step);
+    valueRef.current = next;
+    onValueChange?.(next);
+    return next;
+  };
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: () => !disabled,
+    onStartShouldSetPanResponder: () => !disabled,
+    onPanResponderGrant: (event) => { Animated.timing(press, { toValue: 1, duration: 100, useNativeDriver: true }).start(); changeAt(event.nativeEvent.locationX); },
+    onPanResponderMove: (event) => { changeAt(event.nativeEvent.locationX); },
+    onPanResponderRelease: () => { Animated.timing(press, { toValue: 0, duration: 180, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
+    onPanResponderTerminate: () => { Animated.timing(press, { toValue: 0, duration: 140, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
+  }), [disabled, maximumValue, minimumValue, onSlidingComplete, onValueChange, press, step, trackWidth]);
+  const thumbTransform = { transform: [{ scaleX: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.28] }) }, { scaleY: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) }] };
+  return <View accessibilityLabel={accessibilityLabel} accessibilityRole="adjustable" accessibilityState={{ disabled }} onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)} style={[styles.sliderShell, style, containerStyle, disabled && styles.disabled]} {...panResponder.panHandlers}>
     <View pointerEvents="none" style={styles.sliderTrack} />
-    <LinearGradient pointerEvents="none" colors={["#3153BE", "#5A78E8"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={[styles.sliderLiquid, { right: `${100 - progress * 100}%` }]} />
-    <View pointerEvents="none" style={[styles.sliderShine, { right: `${Math.max(0, 100 - progress * 100 + 4)}%` }]} />
-    <Slider {...props} maximumTrackTintColor="transparent" minimumTrackTintColor="transparent" style={styles.slider} thumbTintColor="#29489E" />
+    <LinearGradient pointerEvents="none" colors={["#0088FF", "#4B6FE6"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={[styles.sliderLiquid, { width: `${progress * 100}%` }]} />
+    <Animated.View pointerEvents="none" style={[styles.sliderThumb, { left: `${progress * 100}%` }, thumbTransform]}><View style={styles.sliderThumbHighlight} /></Animated.View>
   </View>;
 }
 
@@ -69,9 +96,9 @@ const styles = StyleSheet.create({
   segmentGlint: { backgroundColor: "rgba(255,255,255,0.68)", borderRadius: 10, height: 11, left: 5, position: "absolute", right: 5, top: -3 },
   segmentText: { color: "#65769A", fontSize: 12, fontWeight: "800" },
   segmentTextActive: { color: "#3E60CE", fontWeight: "900" },
-  sliderShell: { height: 46, justifyContent: "center", overflow: "visible", position: "relative" },
-  sliderTrack: { backgroundColor: "rgba(139,160,207,0.38)", borderColor: "rgba(255,255,255,0.76)", borderRadius: 99, borderWidth: 1, height: 10, left: 0, position: "absolute", right: 0 },
-  sliderLiquid: { borderRadius: 99, height: 8, left: 1, position: "absolute" },
-  sliderShine: { backgroundColor: "rgba(255,255,255,0.58)", borderRadius: 99, height: 2, left: 6, position: "absolute", top: 16 },
-  slider: { height: 46, width: "100%" },
+  sliderShell: { height: 48, justifyContent: "center", overflow: "visible", position: "relative" },
+  sliderTrack: { backgroundColor: "rgba(120,135,165,0.24)", borderRadius: 99, height: 6, left: 0, position: "absolute", right: 0 },
+  sliderLiquid: { borderRadius: 99, height: 6, left: 0, position: "absolute" },
+  sliderThumb: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.96)", borderColor: "rgba(255,255,255,0.98)", borderRadius: 12, borderWidth: 1, elevation: 4, height: 24, justifyContent: "center", marginLeft: -20, position: "absolute", shadowColor: "#1C315F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 4, width: 40 },
+  sliderThumbHighlight: { backgroundColor: "rgba(0,136,255,0.5)", borderRadius: 99, height: 4, width: 19 },
 });
