@@ -42,6 +42,7 @@ describe("LAN sync protocol", () => {
   it("accepts complete commands and rejects malformed network payloads", () => {
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_1", name: "complete", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "complete" } });
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_2", name: "cancel", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "cancel" } });
+    expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_3", name: "open", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "open" } });
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_1", name: "erase-all" } }))).toBeNull();
     expect(parseSyncMessage("not json")).toBeNull();
   });

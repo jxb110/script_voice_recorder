@@ -13,15 +13,16 @@ import { createProjectSyncKey } from "@/lib/lan-sync-protocol";
 import { createRecordingArchive } from "@/lib/recorder-files";
 import { useRecorder } from "@/lib/recorder-context";
 import { useSyncRoom } from "@/lib/sync-room-context";
+import { shouldClientOpenSyncRecording } from "@/lib/sync-recording-navigation";
 
 export default function ProjectScreen() {
   const router = useRouter();
   const { language } = useAppLanguage();
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { projects, speakers, deleteProject } = useRecorder();
-  const { status: syncStatus } = useSyncRoom();
+  const { status: syncStatus, sendCommand, subscribeCommands } = useSyncRoom();
   const project = projects.find((item) => item.id === projectId);
-  const autoOpenedClientRoomRef = useRef<string | null>(null);
+  const openedClientCommandRef = useRef<string | null>(null);
   const [joiningExistingRoom, setJoiningExistingRoom] = useState(false);
   const copy = language === "zh" ? { missing: "未找到该录音任务。", home: "返回主页", notRecorded: "该句尚未录制", notRecordedHint: "完成录制后即可使用系统分享面板发送音频文件。", noSharing: "当前不可分享", noSharingHint: "请在 Android 设备上使用文件分享功能。", shareSentence: "分享单句录音", sharePackage: "分享完整录音包", packageFailed: "打包失败", packageUnavailable: "当前设备不可使用系统分享。", packageCreateFailed: "无法创建录音包。", deleteTitle: "删除任务？", deleteHint: (name: string, hasRecordings: boolean) => `“${name}”会从任务列表中移除。${hasRecordings ? "已录制的音频文件不会自动上传或恢复。" : ""}`, cancel: "取消", delete: "删除任务", replaceLocked: "无法更换文本", replaceLockedHint: "任务已经有录音进度。为避免录音和文本错配，当前任务不能更换脚本。", detail: "任务详情", speakerMissing: "发音人信息缺失", completed: "已完成", replace: "更换文本", lockHint: "已有录音进度，已锁定更换文本以保护录音与脚本对应关系。", review: "查看并重录", continue: "继续录制", start: "开始录制", sentenceList: "句子清单", listHint: "点击跳转 · 右侧分享", years: "岁" } : { missing: "Recording task not found.", home: "Back to tasks", notRecorded: "Sentence not recorded", notRecordedHint: "Finish recording this sentence before sharing the audio file.", noSharing: "Sharing unavailable", noSharingHint: "Use the file sharing feature on an Android device.", shareSentence: "Share sentence recording", sharePackage: "Share complete recording package", packageFailed: "Archive failed", packageUnavailable: "System sharing is unavailable on this device.", packageCreateFailed: "Unable to create the recording package.", deleteTitle: "Delete task?", deleteHint: (name: string, hasRecordings: boolean) => `“${name}” will be removed from the task list.${hasRecordings ? " Recorded audio files will not be uploaded or restored." : ""}`, cancel: "Cancel", delete: "Delete task", replaceLocked: "Cannot replace script", replaceLockedHint: "This task already has recording progress. The script is locked to keep audio aligned with its text.", detail: "Task details", speakerMissing: "Speaker information missing", completed: "Completed", replace: "Replace script", lockHint: "Recording progress locks script replacement to protect the text-to-audio relationship.", review: "Review and re-record", continue: "Continue recording", start: "Start recording", sentenceList: "Sentences", listHint: "Tap to jump · Share on the right", years: "years" };
   const genderLabel = (gender: string) => language === "zh" ? gender : gender === "女" ? "Female" : gender === "男" ? "Male" : "Other";
@@ -29,12 +30,14 @@ export default function ProjectScreen() {
   useEffect(() => {
     if (projectSyncKey) releaseLanSyncForTaskSwitch(projectSyncKey, "project-detail-opened");
   }, [projectSyncKey]);
-  const clientWaitingForHost = Boolean(project) && syncStatus.mode === "client" && Boolean(syncStatus.projectId);
   useEffect(() => {
-    if (!clientWaitingForHost || autoOpenedClientRoomRef.current === projectSyncKey || !project) return;
-    autoOpenedClientRoomRef.current = projectSyncKey;
-    router.replace(`/record/${project.id}?sentence=0` as never);
-  }, [clientWaitingForHost, project, projectSyncKey, router]);
+    if (!project || !projectSyncKey) return;
+    return subscribeCommands((command) => {
+      if (!shouldClientOpenSyncRecording(syncStatus.mode, syncStatus.projectId, projectSyncKey, command) || openedClientCommandRef.current === command.id) return;
+      openedClientCommandRef.current = command.id;
+      router.replace(`/record/${project.id}?sentence=${Math.max(0, command.sentenceIndex)}` as never);
+    });
+  }, [project, projectSyncKey, router, subscribeCommands, syncStatus.mode, syncStatus.projectId]);
   if (!project) return <ScreenContainer className="items-center justify-center px-6"><Text style={styles.missing}>{copy.missing}</Text><TouchableOpacity onPress={() => router.replace("/" as never)}><Text style={styles.link}>{copy.home}</Text></TouchableOpacity></ScreenContainer>;
 
   const speaker = speakers.find((item) => item.id === project.speakerId);
@@ -46,6 +49,11 @@ export default function ProjectScreen() {
   const syncRestricted = syncActive || joiningExistingRoom;
   const compactSummary = true;
   const openSentence = (index: number) => router.push(`/record/${project.id}?sentence=${index}` as never);
+  const openSyncRecording = (index: number) => {
+    const target = Math.max(0, index);
+    if (syncStatus.mode === "host") sendCommand("open", target);
+    router.replace(`/record/${project.id}?sentence=${target}` as never);
+  };
   const shareSentence = async (uri?: string) => { if (!uri) { Alert.alert(copy.notRecorded, copy.notRecordedHint); return; } if (Platform.OS === "web" || !(await Sharing.isAvailableAsync())) { Alert.alert(copy.noSharing, copy.noSharingHint); return; } await Sharing.shareAsync(uri, { mimeType: "audio/wav", dialogTitle: copy.shareSentence }); };
   const sharePackage = async () => { if (!speaker) return; try { const archive = await createRecordingArchive(project, speaker); if (!(await Sharing.isAvailableAsync())) throw new Error(copy.packageUnavailable); await Sharing.shareAsync(archive, { mimeType: "application/zip", dialogTitle: copy.sharePackage }); } catch (error) { Alert.alert(copy.packageFailed, error instanceof Error ? error.message : copy.packageCreateFailed); } };
   const confirmDelete = () => Alert.alert(copy.deleteTitle, copy.deleteHint(project.name, Boolean(recorded)), [{ text: copy.cancel, style: "cancel" }, { text: copy.delete, style: "destructive", onPress: () => { deleteProject(project.id); router.replace("/(tabs)/scripts" as never); } }]);
@@ -57,7 +65,7 @@ export default function ProjectScreen() {
       <View style={[styles.summaryTop, compactSummary && styles.summaryTopCompact]}><View style={[styles.fileBadge, glass.fileBadge, compactSummary && styles.fileBadgeCompact]}><MaterialIcons color="#4669DE" name="description" size={compactSummary ? 18 : 21} /></View><View style={styles.summaryCopy}><Text numberOfLines={1} style={[styles.projectName, glass.projectName, compactSummary && styles.projectNameCompact]}>{project.name}</Text><Text numberOfLines={1} style={[styles.projectMeta, glass.projectMeta, compactSummary && styles.projectMetaCompact]}>{speaker ? `${speaker.name} · ${genderLabel(speaker.gender)} · ${speaker.age} ${copy.years}` : copy.speakerMissing}</Text></View></View>
       <View style={[styles.summaryBottom, compactSummary && styles.summaryBottomCompact]}><View><Text style={[styles.percent, compactSummary && styles.percentCompact]}>{project.sentences.length ? Math.round((recorded / project.sentences.length) * 100) : 0}%</Text><Text style={[styles.percentLabel, glass.percentLabel, compactSummary && styles.percentLabelCompact]}>{copy.completed}</Text></View><View style={[styles.track, glass.track, compactSummary && styles.trackCompact]}><View style={[styles.progress, glass.progress, { width: `${project.sentences.length ? (recorded / project.sentences.length) * 100 : 0}%` }]} /></View><Text style={[styles.counter, glass.counter, compactSummary && styles.counterCompact]}>{recorded}/{project.sentences.length}</Text></View>
     </GlassSurface>
-    <SyncRoomPanel language={language} onJoinIntentChange={setJoiningExistingRoom} onOpenRecording={() => openSentence(Math.max(0, firstPending))} projectSyncKey={syncKey} />
+    <SyncRoomPanel language={language} onJoinIntentChange={setJoiningExistingRoom} onOpenRecording={() => openSyncRecording(Math.max(0, firstPending))} projectSyncKey={syncKey} />
     {!syncRestricted ? <>
       <View style={styles.managementRow}><TouchableOpacity style={[styles.manageButton, glass.manageButton, !canReplaceScript && styles.manageDisabled]} onPress={openReplace}><MaterialIcons color={canReplaceScript ? "#4669DE" : "#9AA5BC"} name="swap-horiz" size={20} /><Text style={[styles.manageText, glass.manageText, !canReplaceScript && styles.manageTextDisabled]}>{copy.replace}</Text></TouchableOpacity><TouchableOpacity style={[styles.deleteManageButton, glass.deleteManageButton]} onPress={confirmDelete}><MaterialIcons color="#C34F5A" name="delete-outline" size={20} /><Text style={styles.deleteManageText}>{copy.delete}</Text></TouchableOpacity></View>
       {!canReplaceScript && <Text style={[styles.lockHint, glass.lockHint]}>{copy.lockHint}</Text>}
