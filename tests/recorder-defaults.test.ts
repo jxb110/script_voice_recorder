@@ -4,8 +4,10 @@ import { READING_FONT_SIZE } from "@/lib/reading-font";
 import { DEFAULT_RECORDER_SETTINGS } from "@/shared/recorder-types";
 
 describe("录音默认设置", () => {
-  it("默认使用最小朗读字号", () => {
-    expect(DEFAULT_RECORDER_SETTINGS.readingFontSize).toBe(READING_FONT_SIZE.minimumValue);
+  it("默认使用 20 号朗读字体", () => {
+    expect(DEFAULT_RECORDER_SETTINGS.readingFontSize).toBe(20);
+    expect(DEFAULT_RECORDER_SETTINGS.readingFontSize).toBeGreaterThanOrEqual(READING_FONT_SIZE.minimumValue);
+    expect(DEFAULT_RECORDER_SETTINGS.readingFontSize).toBeLessThanOrEqual(READING_FONT_SIZE.maximumValue);
   });
 
   it("默认使用 500ms 首尾静音、16-bit 与单通道", () => {

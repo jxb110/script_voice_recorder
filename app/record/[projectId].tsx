@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { AudioWaveform } from "@/components/audio-waveform";
 import { LiquidSlider } from "@/components/liquid-controls";
@@ -106,7 +106,7 @@ export default function RecordingScreen() {
   };
 
   useEffect(() => { setCurrentIndex(Math.min(Math.max(0, Number(sentenceParam) || 0), Math.max(0, total - 1))); }, [sentenceParam, total]);
-  useEffect(() => { setReadingFontSize(settings.readingFontSize); }, [settings.readingFontSize]);
+  useEffect(() => { setReadingFontSize(clampReadingFontSize(settings.readingFontSize)); }, [settings.readingFontSize]);
   useEffect(() => {
     reportStateRef.current = reportState;
     syncExitStateRef.current = { active: syncStatus.mode !== "idle" && syncStatus.projectId === activeSyncProjectKey, sentenceIndex: currentIndex };
@@ -290,7 +290,7 @@ function SyncDeviceDot({ device }: { device: ReturnType<typeof useSyncRoom>["sta
     return () => animation.stop();
   }, [indicator, pulse]);
   const label = indicator === "recording-screen" ? `${device.name}：已进入录制界面` : indicator === "waiting" ? `${device.name}：在线，等待主控进入同步录制` : `${device.name}：离线，连接已断开`;
-  return <View style={styles.syncDotWrap}>{showName ? <View pointerEvents="none" style={styles.syncDotTooltip}><Text numberOfLines={1} style={styles.syncDotTooltipText}>{device.name}</Text></View> : null}<Animated.View style={{ opacity: indicator === "waiting" ? pulse : 1 }}><TouchableOpacity accessibilityHint="点击显示设备名称" accessibilityLabel={label} activeOpacity={0.78} onPress={() => setShowName((value) => !value)} style={[styles.syncDot, indicator === "recording-screen" ? styles.syncDotRecording : indicator === "waiting" ? styles.syncDotWaiting : styles.syncDotOffline]}><Text style={styles.syncDotInitial}>{getSyncDeviceInitial(device.name)}</Text></TouchableOpacity></Animated.View></View>;
+  return <><View style={styles.syncDotWrap}><Animated.View style={{ opacity: indicator === "waiting" ? pulse : 1 }}><TouchableOpacity accessibilityHint="点击显示设备完整名称" accessibilityLabel={label} activeOpacity={0.78} onPress={() => setShowName(true)} style={[styles.syncDot, indicator === "recording-screen" ? styles.syncDotRecording : indicator === "waiting" ? styles.syncDotWaiting : styles.syncDotOffline]}><Text style={styles.syncDotInitial}>{getSyncDeviceInitial(device.name)}</Text></TouchableOpacity></Animated.View></View><Modal animationType="fade" onRequestClose={() => setShowName(false)} transparent visible={showName}><Pressable accessibilityLabel="关闭设备名称提示" onPress={() => setShowName(false)} style={responsive.deviceNameBackdrop}><View accessibilityLabel={label} style={responsive.deviceNameCard}><Text style={responsive.deviceNameTitle}>设备名称</Text><Text selectable style={responsive.deviceNameFull}>{device.name}</Text><Text style={responsive.deviceNameState}>{label}</Text><Text style={responsive.deviceNameClose}>点击任意位置关闭</Text></View></Pressable></Modal></>;
 }
 
 function formatSeconds(seconds?: number) { const safe = Math.max(0, Math.floor(seconds ?? 0)); return `${Math.floor(safe / 60).toString().padStart(2, "0")}:${(safe % 60).toString().padStart(2, "0")}`; }
@@ -300,6 +300,12 @@ const responsive = StyleSheet.create({
   fontControl: { minHeight: 48, paddingVertical: 0 },
   fontSlider: { height: 48, minWidth: 0 },
   fontValue: { minWidth: 30 },
+  deviceNameBackdrop: { alignItems: "center", backgroundColor: "rgba(15,24,42,0.38)", flex: 1, justifyContent: "center", paddingHorizontal: 24 },
+  deviceNameCard: { backgroundColor: "#F9FBFF", borderColor: "rgba(255,255,255,0.96)", borderRadius: 18, borderWidth: 1, maxWidth: 480, padding: 18, width: "100%" },
+  deviceNameTitle: { color: "#61749E", fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
+  deviceNameFull: { color: "#182B55", fontSize: 20, fontWeight: "900", lineHeight: 28, marginTop: 8, textAlign: "center" },
+  deviceNameState: { color: "#4669DE", fontSize: 13, lineHeight: 19, marginTop: 10, textAlign: "center" },
+  deviceNameClose: { color: "#7182A1", fontSize: 11, marginTop: 14, textAlign: "center" },
 });
 
 const styles = StyleSheet.create({
