@@ -25,9 +25,9 @@ const HEARTBEAT_MS = 5_000;
 
 type TcpServer = {
   once: (event: "listening" | "error", listener: (() => void) | ((error: Error) => void)) => TcpServer;
-  on: (event: "error", listener: (error: Error) => void) => TcpServer;
+  on: (event: "error" | "close", listener: (() => void) | ((error: Error) => void)) => TcpServer;
   listen: (options: { port: number; host?: string; reuseAddress?: boolean }) => TcpServer;
-  close: () => TcpServer;
+  close: (callback?: (error?: Error) => void) => TcpServer;
 };
 type TcpFactory = {
   createServer: (options: { keepAlive?: boolean; noDelay?: boolean } | ((socket: TcpSocket) => void), listener?: (socket: TcpSocket) => void) => TcpServer;
@@ -123,8 +123,7 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
   if (Platform.OS === "web") throw new Error("请在 Android 主控手机中创建同步房间。");
   const hostProjectKey = normalizeSyncProjectKey(input.projectId);
   if (!hostProjectKey) throw new Error("主控同步任务键无效。请返回任务详情后重试。");
-  if (session.mode === "host" && session.projectId === hostProjectKey) return session;
-  stopLanSync();
+  await forceResetLanSync("host-recreate");
   const ip = await Network.getIpAddressAsync();
   if (!ip || ip === "0.0.0.0") throw new Error("未能读取局域网地址。请连接同一 Wi-Fi 或开启热点后重试。");
   const self = createDevice(input.deviceName, "host");
@@ -147,6 +146,26 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
     stopLanSync();
     throw error;
   }
+}
+
+async function forceResetLanSync(reason: string) {
+  logDiagnostic("sync-force-reset", `reason=${reason}; previous=${session.mode}`);
+  if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+  if (client) { try { client.socket.destroy(); } catch { /* ignored */ } }
+  client = null;
+  for (const peer of peers) { try { peer.socket.destroy(); } catch { /* ignored */ } }
+  peers.clear();
+  const closingServer = server;
+  server = null;
+  session = { mode: "idle", self: idleDevice(), devices: [] };
+  emit();
+  if (!closingServer) return;
+  await new Promise<void>((resolve) => {
+    let completed = false;
+    const done = () => { if (!completed) { completed = true; resolve(); } };
+    try { closingServer.close(() => done()); } catch { done(); }
+    setTimeout(done, 700);
+  });
 }
 
 export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus> {
@@ -227,8 +246,9 @@ export function stopLanSync() {
   client = null;
   for (const peer of peers) { try { peer.socket.destroy(); } catch { /* ignored */ } }
   peers.clear();
-  if (server) { try { server.close(); } catch { /* ignored */ } }
+  const closingServer = server;
   server = null;
+  if (closingServer) { try { closingServer.close(); } catch { /* ignored */ } }
   session = { mode: "idle", self: idleDevice(), devices: [] };
   emit();
 }
