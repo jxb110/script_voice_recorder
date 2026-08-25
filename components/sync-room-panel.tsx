@@ -46,7 +46,29 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   useEffect(() => {
     if (displayStatus.mode === "host") setExpanded(true);
   }, [displayStatus.mode]);
-  const startHost = async () => { setWorking(true); try { const next = await hostRoom({ projectId: projectSyncKey, deviceName }); setHostSnapshot(next); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
+  const startHost = async () => {
+    // Reset panel-only bindings before creating a completely fresh room.
+    setHostSnapshot(null);
+    setShowJoin(false);
+    setHost("");
+    setPort(String(LAN_SYNC_PORT));
+    setRoomCode("");
+    setInviteProjectSyncKey("");
+    setInviteVersion(undefined);
+    setShowQr(false);
+    setShowScanner(false);
+    onJoinIntentChange?.(false);
+    setWorking(true);
+    try {
+      const next = await hostRoom({ projectId: projectSyncKey, deviceName });
+      setHostSnapshot(next);
+      setExpanded(true);
+    } catch (error) {
+      Alert.alert(copy.error, error instanceof Error ? error.message : copy.error);
+    } finally {
+      setWorking(false);
+    }
+  };
   const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
   const closeRoom = () => {
     leaveRoom();
