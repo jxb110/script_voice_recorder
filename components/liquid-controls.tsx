@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { type PropsWithChildren, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { resolveLiquidSliderDragValue, resolveLiquidSliderValue } from "@/lib/liquid-slider";
+import { resolveLiquidSliderValue } from "@/lib/liquid-slider";
 
 type LiquidButtonProps = PropsWithChildren<{
   onPress?: () => void;
@@ -59,7 +59,6 @@ export function LiquidSlider({ accessibilityLabel, containerStyle, disabled = fa
   const trackWidthRef = useRef(0);
   const press = useRef(new Animated.Value(0)).current;
   const valueRef = useRef(value);
-  const dragStartValueRef = useRef(value);
   valueRef.current = value;
   const progress = Math.max(0, Math.min(1, (value - minimumValue) / Math.max(0.0001, maximumValue - minimumValue)));
   const changeAt = (position: number) => {
@@ -71,20 +70,11 @@ export function LiquidSlider({ accessibilityLabel, containerStyle, disabled = fa
     onValueChange?.(next);
     return next;
   };
-  const changeByDelta = (deltaX: number) => {
-    const width = trackWidthRef.current;
-    if (width <= 0) return valueRef.current;
-    const next = resolveLiquidSliderDragValue(dragStartValueRef.current, deltaX, width, minimumValue, maximumValue, step);
-    if (next === valueRef.current) return next;
-    valueRef.current = next;
-    onValueChange?.(next);
-    return next;
-  };
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: () => !disabled,
     onStartShouldSetPanResponder: () => !disabled,
-    onPanResponderGrant: (event) => { Animated.timing(press, { toValue: 1, duration: 100, useNativeDriver: true }).start(); dragStartValueRef.current = changeAt(event.nativeEvent.locationX); },
-    onPanResponderMove: (_event, gesture) => { changeByDelta(gesture.dx); },
+    onPanResponderGrant: (event) => { Animated.timing(press, { toValue: 1, duration: 100, useNativeDriver: true }).start(); changeAt(event.nativeEvent.locationX); },
+    onPanResponderMove: (event) => { changeAt(event.nativeEvent.locationX); },
     onPanResponderRelease: () => { Animated.timing(press, { toValue: 0, duration: 180, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
     onPanResponderTerminate: () => { Animated.timing(press, { toValue: 0, duration: 140, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
   }), [disabled, maximumValue, minimumValue, onSlidingComplete, onValueChange, press, step, trackWidth]);
