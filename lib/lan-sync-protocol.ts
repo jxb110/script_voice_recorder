@@ -79,7 +79,7 @@ export function parseSyncRoomInvite(raw: string): SyncRoomInvite | null {
 }
 
 export type SyncRole = "host" | "client";
-export type SyncRecordingState = "idle" | "leading" | "recording" | "trailing" | "saving" | "playing" | "error";
+export type SyncRecordingState = "idle" | "ready" | "leading" | "recording" | "trailing" | "saving" | "playing" | "error";
 export type SyncCommandName = "open" | "start" | "stop" | "previous" | "next" | "jump" | "play" | "rerecord" | "cancel" | "complete";
 
 export type SyncCommand = {
@@ -182,5 +182,5 @@ function isDeviceUpdate(value: unknown): value is Omit<SyncDevice, "role" | "con
 }
 
 function isRecordingState(value: unknown): value is SyncRecordingState {
-  return value === "idle" || value === "leading" || value === "recording" || value === "trailing" || value === "saving" || value === "playing" || value === "error";
+  return value === "idle" || value === "ready" || value === "leading" || value === "recording" || value === "trailing" || value === "saving" || value === "playing" || value === "error";
 }

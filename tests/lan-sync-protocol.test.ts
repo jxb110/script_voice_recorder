@@ -47,6 +47,10 @@ describe("LAN sync protocol", () => {
     expect(parseSyncMessage("not json")).toBeNull();
   });
 
+  it("accepts a ready device state from a recording screen", () => {
+    expect(parseSyncMessage(JSON.stringify({ type: "device-state", device: { id: "device_a", name: "录音设备 A", state: "ready", sentenceIndex: 3, updatedAt: 2_000 }, sentAt: 2_000 }))).toMatchObject({ type: "device-state", device: { state: "ready" } });
+  });
+
   it("creates a WebSocket endpoint from a separate host and port", () => {
     expect(createLanSyncAddress("192.168.1.20", "35679")).toBe("ws://192.168.1.20:35679");
     expect(createLanSyncAddress("ws://192.168.1.20:35679", "")).toBe("ws://192.168.1.20:35679");
