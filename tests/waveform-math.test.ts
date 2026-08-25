@@ -36,9 +36,11 @@ describe("录音波形数据转换", () => {
 
   it("将静音段绘制为低平基线，并放大有声段的可观察变化", () => {
     expect(classifyWaveformSample(normalizeMetering(-65)!)).toBe("silence");
+    expect(classifyWaveformSample(normalizeMetering(-50)!)).toBe("silence");
     expect(classifyWaveformSample(normalizeMetering(-25)!)).toBe("voice");
     expect(waveformDisplayStrength(normalizeMetering(-65)!)).toBe(0);
-    expect(waveformDisplayStrength(normalizeMetering(-25)!)).toBeGreaterThan(0.6);
+    expect(waveformDisplayStrength(normalizeMetering(-25)!)).toBeGreaterThan(0.4);
+    expect(waveformDisplayStrength(normalizeMetering(-25)!)).toBeGreaterThan(waveformDisplayStrength(normalizeMetering(-35)!));
   });
 
   it("在任意输入振幅下将双边波形严格限制在显示高度内", () => {

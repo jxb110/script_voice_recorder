@@ -1,4 +1,4 @@
-export const WAVEFORM_WINDOW_MS = 120;
+export const WAVEFORM_WINDOW_MS = 200;
 
 export function waveformBufferLength(sampleRate: number) {
   return Math.max(512, Math.floor(sampleRate * WAVEFORM_WINDOW_MS / 1000));

@@ -56,12 +56,16 @@ type LiquidSliderProps = {
 
 export function LiquidSlider({ accessibilityLabel, containerStyle, disabled = false, maximumValue = 100, minimumValue = 0, onSlidingComplete, onValueChange, step = 1, style, value = minimumValue }: LiquidSliderProps) {
   const [trackWidth, setTrackWidth] = useState(0);
+  const trackWidthRef = useRef(0);
   const press = useRef(new Animated.Value(0)).current;
   const valueRef = useRef(value);
   valueRef.current = value;
   const progress = Math.max(0, Math.min(1, (value - minimumValue) / Math.max(0.0001, maximumValue - minimumValue)));
   const changeAt = (position: number) => {
-    const next = resolveLiquidSliderValue(position, trackWidth, minimumValue, maximumValue, step);
+    const width = trackWidthRef.current;
+    if (width <= 0) return valueRef.current;
+    const next = resolveLiquidSliderValue(position, width, minimumValue, maximumValue, step);
+    if (next === valueRef.current) return next;
     valueRef.current = next;
     onValueChange?.(next);
     return next;
@@ -75,7 +79,7 @@ export function LiquidSlider({ accessibilityLabel, containerStyle, disabled = fa
     onPanResponderTerminate: () => { Animated.timing(press, { toValue: 0, duration: 140, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
   }), [disabled, maximumValue, minimumValue, onSlidingComplete, onValueChange, press, step, trackWidth]);
   const thumbTransform = { transform: [{ scaleX: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.28] }) }, { scaleY: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) }] };
-  return <View accessibilityLabel={accessibilityLabel} accessibilityRole="adjustable" accessibilityState={{ disabled }} onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)} style={[styles.sliderShell, style, containerStyle, disabled && styles.disabled]} {...panResponder.panHandlers}>
+  return <View accessibilityLabel={accessibilityLabel} accessibilityRole="adjustable" accessibilityState={{ disabled }} onLayout={(event) => { const nextWidth = event.nativeEvent.layout.width; trackWidthRef.current = nextWidth; setTrackWidth((previous) => previous === nextWidth ? previous : nextWidth); }} style={[styles.sliderShell, style, containerStyle, disabled && styles.disabled]} {...panResponder.panHandlers}>
     <View pointerEvents="none" style={styles.sliderTrack} />
     <LinearGradient pointerEvents="none" colors={["#0088FF", "#4B6FE6"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={[styles.sliderLiquid, { width: `${progress * 100}%` }]} />
     <Animated.View pointerEvents="none" style={[styles.sliderThumb, { left: `${progress * 100}%` }, thumbTransform]}><View style={styles.sliderThumbHighlight} /></Animated.View>

@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { peakDbFromSamples, WAVEFORM_WINDOW_MS, waveformBufferLength } from "@/lib/waveform-window";
 
 describe("录制波形窗口", () => {
-  it("以 120ms 作为每次波形更新窗口", () => {
-    expect(WAVEFORM_WINDOW_MS).toBe(120);
-    expect(waveformBufferLength(48_000)).toBe(5_760);
+  it("以 200ms 作为每次波形更新窗口", () => {
+    expect(WAVEFORM_WINDOW_MS).toBe(200);
+    expect(waveformBufferLength(48_000)).toBe(9_600);
   });
 
   it("以缓冲区绝对峰值计算分贝，不使用 RMS 均值", () => {
