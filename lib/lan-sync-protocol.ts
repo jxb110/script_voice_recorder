@@ -43,16 +43,26 @@ export function normalizeLanSocketChunk(chunk: unknown): Uint8Array {
   return new Uint8Array(0);
 }
 
-export type SyncRoomInvite = { host: string; port: number; roomCode: string; projectSyncKey?: string };
+export type SyncRoomInvite = { host: string; port: number; roomCode: string; projectSyncKey?: string; version: number };
+
+export function normalizeSyncRoomCode(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+export function normalizeSyncProjectKey(value: string) {
+  return value.trim();
+}
 
 export function createSyncRoomInvite(address: string, roomCode: string, projectSyncKey: string) {
   const normalized = createLanSyncAddress(address, "").replace(/^ws:\/\//, "");
   const separator = normalized.lastIndexOf(":");
   const host = normalized.slice(0, separator);
   const port = Number(normalized.slice(separator + 1));
-  if (!/^[A-Z0-9]{4,12}$/.test(roomCode.trim().toUpperCase())) throw new Error("房间口令无效。");
-  if (!projectSyncKey.trim()) throw new Error("同步任务键无效。");
-  return JSON.stringify({ type: SYNC_INVITE_TYPE, version: 2, host, port, roomCode: roomCode.trim().toUpperCase(), projectSyncKey: projectSyncKey.trim() });
+  const normalizedRoomCode = normalizeSyncRoomCode(roomCode);
+  const normalizedProjectKey = normalizeSyncProjectKey(projectSyncKey);
+  if (!/^[A-Z0-9]{4,12}$/.test(normalizedRoomCode)) throw new Error("房间口令无效。");
+  if (!normalizedProjectKey) throw new Error("同步任务键无效。");
+  return JSON.stringify({ type: SYNC_INVITE_TYPE, version: 2, host, port, roomCode: normalizedRoomCode, projectSyncKey: normalizedProjectKey });
 }
 
 export function parseSyncRoomInvite(raw: string): SyncRoomInvite | null {
@@ -60,9 +70,9 @@ export function parseSyncRoomInvite(raw: string): SyncRoomInvite | null {
     const value = JSON.parse(raw) as Record<string, unknown>;
     if (value.type !== SYNC_INVITE_TYPE || (value.version !== 1 && value.version !== 2) || !isString(value.host) || !isNumber(value.port) || !isString(value.roomCode)) return null;
     createLanSyncAddress(value.host, value.port);
-    const roomCode = value.roomCode.trim().toUpperCase();
-    const projectSyncKey = value.version === 2 && isString(value.projectSyncKey) ? value.projectSyncKey.trim() : undefined;
-    return /^[A-Z0-9]{4,12}$/.test(roomCode) ? { host: value.host, port: value.port, roomCode, projectSyncKey } : null;
+    const roomCode = normalizeSyncRoomCode(value.roomCode);
+    const projectSyncKey = value.version === 2 && isString(value.projectSyncKey) ? normalizeSyncProjectKey(value.projectSyncKey) : undefined;
+    return /^[A-Z0-9]{4,12}$/.test(roomCode) ? { host: value.host, port: value.port, roomCode, projectSyncKey, version: value.version } : null;
   } catch {
     return null;
   }
