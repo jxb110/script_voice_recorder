@@ -43,7 +43,7 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
     if (status.mode === "host") setHostSnapshot(status);
     else if (status.mode === "idle") setHostSnapshot(null);
   }, [status]);
-  useEffect(() => { if (displayStatus.mode === "host") setExpanded(true); }, [displayStatus.mode]);
+  useEffect(() => { if (displayStatus.mode !== "idle") setExpanded(true); }, [displayStatus.mode]);
 
   const startHost = async () => {
     setHostSnapshot(null);
