@@ -24,20 +24,22 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   const [host, setHost] = useState("");
   const [port, setPort] = useState(String(LAN_SYNC_PORT));
   const [roomCode, setRoomCode] = useState("");
+  const [inviteProjectSyncKey, setInviteProjectSyncKey] = useState("");
   const [working, setWorking] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showQr, setShowQr] = useState(false);
-  const activeForProject = status.mode !== "idle" && status.projectId === projectSyncKey;
+  const roomProjectKey = inviteProjectSyncKey || projectSyncKey;
+  const activeForProject = status.mode !== "idle" && (status.projectId === roomProjectKey || status.mode === "client");
   const activeElsewhere = status.mode !== "idle" && !activeForProject;
-  const invite = status.mode === "host" && status.address && status.roomCode ? createSyncRoomInvite(status.address, status.roomCode) : null;
+  const invite = status.mode === "host" && status.address && status.roomCode && status.projectId ? createSyncRoomInvite(status.address, status.roomCode, status.projectId) : null;
 
   useEffect(() => { onJoinIntentChange?.(showJoin); }, [onJoinIntentChange, showJoin]);
   const startHost = async () => { setWorking(true); try { await hostRoom({ projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const closeRoom = () => { leaveRoom(); setShowJoin(false); setExpanded(false); onJoinIntentChange?.(false); };
-  const cancelJoin = () => { setShowJoin(false); setExpanded(false); onJoinIntentChange?.(false); };
-  const applyInvite = (next: { host: string; port: number; roomCode: string }) => { setHost(next.host); setPort(String(next.port)); setRoomCode(next.roomCode); setShowJoin(true); setShowScanner(false); };
+  const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
+  const closeRoom = () => { leaveRoom(); setShowJoin(false); setInviteProjectSyncKey(""); setExpanded(false); onJoinIntentChange?.(false); };
+  const cancelJoin = () => { setShowJoin(false); setInviteProjectSyncKey(""); setExpanded(false); onJoinIntentChange?.(false); };
+  const applyInvite = (next: { host: string; port: number; roomCode: string; projectSyncKey?: string }) => { setHost(next.host); setPort(String(next.port)); setRoomCode(next.roomCode); setInviteProjectSyncKey(next.projectSyncKey ?? ""); setShowJoin(true); setShowScanner(false); };
 
   return <><GlassSurface intensity={34} style={styles.card}>
     <TouchableOpacity activeOpacity={0.72} onPress={() => setExpanded((value) => !value)} style={styles.heading}>

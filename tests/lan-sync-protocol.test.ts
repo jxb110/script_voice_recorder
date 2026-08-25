@@ -45,9 +45,9 @@ describe("LAN sync protocol", () => {
     expect(() => createLanSyncAddress("192.168.1.20", "70000")).toThrow("1 到 65535");
   });
 
-  it("round-trips a QR room invitation without exposing a WebSocket prefix", () => {
-    const invite = createSyncRoomInvite("192.168.1.20:35679", "AB12CD");
-    expect(parseSyncRoomInvite(invite)).toEqual({ host: "192.168.1.20", port: 35679, roomCode: "AB12CD" });
+  it("round-trips a QR room invitation with the host sync task key", () => {
+    const invite = createSyncRoomInvite("192.168.1.20:35679", "AB12CD", "sample.txt|4|first|last");
+    expect(parseSyncRoomInvite(invite)).toEqual({ host: "192.168.1.20", port: 35679, roomCode: "AB12CD", projectSyncKey: "sample.txt|4|first|last" });
     expect(parseSyncRoomInvite("not-an-invite")).toBeNull();
   });
 });

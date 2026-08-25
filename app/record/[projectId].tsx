@@ -31,6 +31,7 @@ export default function RecordingScreen() {
   const { status: syncStatus, reportState, sendCommand, subscribeCommands } = useSyncRoom();
   const project = projects.find((item) => item.id === projectId);
   const syncProjectKey = project ? createProjectSyncKey(project.sourceFileName, project.sentences) : "";
+  const activeSyncProjectKey = syncStatus.mode !== "idle" ? (syncStatus.projectId || syncProjectKey) : syncProjectKey;
   const [currentIndex, setCurrentIndex] = useState(() => Math.max(0, Number(sentenceParam) || 0));
   const [showSentencePicker, setShowSentencePicker] = useState(false);
   const [phase, setPhase] = useState<RecordingPhase>("idle");
@@ -129,7 +130,7 @@ export default function RecordingScreen() {
   }, []);
   useEffect(() => {
     const unsubscribe = subscribeCommands((command) => {
-      if (!syncProjectKey || command.projectId !== syncProjectKey) return;
+      if (!activeSyncProjectKey || command.projectId !== activeSyncProjectKey) return;
       const timer = setTimeout(() => {
         syncTimersRef.current.delete(timer);
         syncCommandHandlerRef.current(command);
@@ -141,11 +142,11 @@ export default function RecordingScreen() {
       syncTimersRef.current.forEach((timer) => clearTimeout(timer));
       syncTimersRef.current.clear();
     };
-  }, [subscribeCommands, syncProjectKey]);
+  }, [activeSyncProjectKey, subscribeCommands]);
   useEffect(() => {
-    if (syncStatus.mode === "idle" || syncStatus.projectId !== syncProjectKey) return;
+    if (syncStatus.mode === "idle" || syncStatus.projectId !== activeSyncProjectKey) return;
     reportState({ state: playerStatus.playing && phase === "idle" ? "playing" : phase, sentenceIndex: currentIndex });
-  }, [currentIndex, phase, playerStatus.playing, reportState, syncProjectKey, syncStatus.mode, syncStatus.projectId]);
+  }, [activeSyncProjectKey, currentIndex, phase, playerStatus.playing, reportState, syncStatus.mode, syncStatus.projectId]);
 
   if (!project || !sentence || !speaker) return <ScreenContainer className="items-center justify-center px-6"><Text style={styles.missing}>Unable to open this recording sentence.</Text><TouchableOpacity onPress={() => router.replace("/(tabs)" as never)}><Text style={styles.backText}>Back to tasks</Text></TouchableOpacity></ScreenContainer>;
 
@@ -191,7 +192,7 @@ export default function RecordingScreen() {
   const jumpToSentence = (target: number) => { stopPlayback(); setCurrentIndex(target); setShowSentencePicker(false); };
   const moveToSyncSentence = (target: number) => { cancelPendingOperation(); void stopRecorderSafely(); stopPlayback(); setPhase("idle"); setCurrentIndex(Math.min(Math.max(0, target), total - 1)); };
   const finishTask = () => { stopPlayback(); router.replace(`/project/${project.id}` as never); };
-  const syncActive = syncStatus.mode !== "idle" && syncStatus.projectId === syncProjectKey;
+  const syncActive = syncStatus.mode !== "idle" && syncStatus.projectId === activeSyncProjectKey;
   const syncHost = syncActive && syncStatus.mode === "host";
   const syncClient = syncActive && syncStatus.mode === "client";
   const sendOrRun = (name: "start" | "stop" | "previous" | "next" | "play" | "rerecord", target = currentIndex) => {

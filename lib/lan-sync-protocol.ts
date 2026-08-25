@@ -43,24 +43,26 @@ export function normalizeLanSocketChunk(chunk: unknown): Uint8Array {
   return new Uint8Array(0);
 }
 
-export type SyncRoomInvite = { host: string; port: number; roomCode: string };
+export type SyncRoomInvite = { host: string; port: number; roomCode: string; projectSyncKey?: string };
 
-export function createSyncRoomInvite(address: string, roomCode: string) {
+export function createSyncRoomInvite(address: string, roomCode: string, projectSyncKey: string) {
   const normalized = createLanSyncAddress(address, "").replace(/^ws:\/\//, "");
   const separator = normalized.lastIndexOf(":");
   const host = normalized.slice(0, separator);
   const port = Number(normalized.slice(separator + 1));
   if (!/^[A-Z0-9]{4,12}$/.test(roomCode.trim().toUpperCase())) throw new Error("房间口令无效。");
-  return JSON.stringify({ type: SYNC_INVITE_TYPE, version: 1, host, port, roomCode: roomCode.trim().toUpperCase() });
+  if (!projectSyncKey.trim()) throw new Error("同步任务键无效。");
+  return JSON.stringify({ type: SYNC_INVITE_TYPE, version: 2, host, port, roomCode: roomCode.trim().toUpperCase(), projectSyncKey: projectSyncKey.trim() });
 }
 
 export function parseSyncRoomInvite(raw: string): SyncRoomInvite | null {
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;
-    if (value.type !== SYNC_INVITE_TYPE || value.version !== 1 || !isString(value.host) || !isNumber(value.port) || !isString(value.roomCode)) return null;
+    if (value.type !== SYNC_INVITE_TYPE || (value.version !== 1 && value.version !== 2) || !isString(value.host) || !isNumber(value.port) || !isString(value.roomCode)) return null;
     createLanSyncAddress(value.host, value.port);
     const roomCode = value.roomCode.trim().toUpperCase();
-    return /^[A-Z0-9]{4,12}$/.test(roomCode) ? { host: value.host, port: value.port, roomCode } : null;
+    const projectSyncKey = value.version === 2 && isString(value.projectSyncKey) ? value.projectSyncKey.trim() : undefined;
+    return /^[A-Z0-9]{4,12}$/.test(roomCode) ? { host: value.host, port: value.port, roomCode, projectSyncKey } : null;
   } catch {
     return null;
   }
