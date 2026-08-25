@@ -115,11 +115,17 @@ function CompactNumber({ label, unit, value, onChange }: { label: string; unit: 
   return <View style={styles.numberCard}><View style={styles.numberLabelRow}><MaterialIcons color="#2F4DA0" name="timer" size={14} /><Text style={styles.numberLabel}>{label}</Text></View><View style={styles.numberValue}><TextInput selectTextOnFocus value={String(value)} keyboardType="number-pad" maxLength={5} onChangeText={(text) => onChange(Number(text.replace(/[^0-9]/g, "")) || 0)} style={styles.numberInput} /><View style={styles.stepper}><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label} +100`} hitSlop={5} style={styles.stepButton} onPress={() => adjust(100)}><MaterialIcons color="#2F4DA0" name="keyboard-arrow-up" size={16} /></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${label} -100`} hitSlop={5} style={styles.stepButton} onPress={() => adjust(-100)}><MaterialIcons color="#2F4DA0" name="keyboard-arrow-down" size={16} /></TouchableOpacity></View><Text style={styles.unit}>{unit}</Text></View></View>;
 }
 function ProfileStat({ label, value }: { label: string; value: string }) { return <View style={styles.profileStat}><Text style={styles.profileStatValue}>{value}</Text><Text style={styles.profileStatLabel}>{label}</Text></View>; }
-function SilenceProfileStat({ label, value }: { label: string; value: string }) { return <View style={styles.profileSilenceStat}><Text numberOfLines={1} style={styles.profileSilenceLabel}>{label}</Text><Text numberOfLines={1} style={styles.profileSilenceValue}>{value}</Text></View>; }
+function SilenceProfileStat({ label, value }: { label: string; value: string }) { return <View style={[styles.profileSilenceStat, profileLayout.stat]}><Text style={[styles.profileSilenceLabel, profileLayout.label]}>{label}</Text><Text numberOfLines={1} style={[styles.profileSilenceValue, profileLayout.value]}>{value}</Text></View>; }
 
 const saveIconStyles = StyleSheet.create({
   button: { alignItems: "center", backgroundColor: "#4B6FE6", borderColor: "rgba(255,255,255,0.9)", borderRadius: 15, borderWidth: 1, elevation: 4, height: 42, justifyContent: "center", shadowColor: "#3658B3", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.23, shadowRadius: 13, width: 42 },
   disabled: { backgroundColor: "#A8B7E3", opacity: 0.64 },
+});
+
+const profileLayout = StyleSheet.create({
+  stat: { alignItems: "flex-start", flexDirection: "column", justifyContent: "center", minHeight: 50, minWidth: 0 },
+  label: { flexShrink: 1, lineHeight: 15 },
+  value: { marginLeft: 0, marginTop: 2 },
 });
 
 const styles = StyleSheet.create({
