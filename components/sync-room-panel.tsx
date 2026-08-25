@@ -31,17 +31,15 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   const [expanded, setExpanded] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showQr, setShowQr] = useState(false);
-  const [locallyDismissed, setLocallyDismissed] = useState(false);
   const roomProjectKey = inviteProjectSyncKey || projectSyncKey;
-  const visibleMode = locallyDismissed ? "idle" : status.mode;
+  const visibleMode = status.mode;
   const activeForProject = visibleMode !== "idle" && (status.projectId === roomProjectKey || visibleMode === "client");
   const invite = visibleMode === "host" && status.address && status.roomCode && status.projectId ? createSyncRoomInvite(status.address, status.roomCode, status.projectId) : null;
 
   useEffect(() => { onJoinIntentChange?.(showJoin); }, [onJoinIntentChange, showJoin]);
-  useEffect(() => { if (status.mode === "idle") setLocallyDismissed(false); }, [status.mode]);
-  const startHost = async () => { setLocallyDismissed(false); setWorking(true); try { await hostRoom({ projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const join = async () => { setLocallyDismissed(false); setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const closeRoom = () => { setLocallyDismissed(true); leaveRoom(); setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
+  const startHost = async () => { setWorking(true); try { await hostRoom({ projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
+  const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
+  const closeRoom = () => { leaveRoom(); setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
   const cancelJoin = () => { setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
   const applyInvite = (next: { host: string; port: number; roomCode: string; projectSyncKey?: string; version: number }) => { setHost(next.host); setPort(String(next.port)); setRoomCode(next.roomCode); setInviteProjectSyncKey(next.projectSyncKey ?? ""); setInviteVersion(next.version); setShowJoin(true); setShowScanner(false); };
   const exportDiagnostics = async () => { await Share.share({ title: copy.diagnostics, message: getLanSyncDiagnosticsText() }); };
