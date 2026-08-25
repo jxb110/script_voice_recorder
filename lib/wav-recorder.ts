@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 
 import type { RecorderSettings } from "@/shared/recorder-types";
+import { peakDbFromSamples, waveformBufferLength } from "@/lib/waveform-window";
 
 type AudioApiModule = typeof import("react-native-audio-api");
 type AudioRecorderInstance = InstanceType<AudioApiModule["AudioRecorder"]>;
@@ -31,13 +32,6 @@ function toFileUri(path: string) {
   return path.startsWith("file://") ? path : `file://${path}`;
 }
 
-function dbFromBuffer(samples: Float32Array) {
-  if (!samples.length) return -80;
-  let sum = 0;
-  for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
-  return 20 * Math.log10(Math.max(Math.sqrt(sum / samples.length), 0.00001));
-}
-
 export async function startWavRecording(settings: RecorderSettings, onMetering: (db: number) => void) {
   const { AudioManager, FileDirectory, FileFormat, FlacCompressionLevel, IOSAudioQuality } = getAudioApi();
   const permission = await AudioManager.requestRecordingPermissions();
@@ -59,8 +53,8 @@ export async function startWavRecording(settings: RecorderSettings, onMetering: 
     },
   });
   if (output.status === "error") throw new Error(output.message);
-  const meter = active.onAudioReady({ sampleRate: settings.sampleRate, bufferLength: Math.max(512, Math.floor(settings.sampleRate / 12)), channelCount: settings.channels }, ({ buffer }) => {
-    onMetering(dbFromBuffer(buffer.getChannelData(0)));
+  const meter = active.onAudioReady({ sampleRate: settings.sampleRate, bufferLength: waveformBufferLength(settings.sampleRate), channelCount: settings.channels }, ({ buffer }) => {
+    onMetering(peakDbFromSamples(buffer.getChannelData(0)));
   });
   if (meter.status === "error") throw new Error(meter.message);
   const sessionActive = await AudioManager.setAudioSessionActivity(true);

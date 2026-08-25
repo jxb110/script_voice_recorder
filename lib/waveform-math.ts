@@ -31,12 +31,11 @@ export function waveformBarHalfHeight(sample: number, totalHeight: number, edgeI
 export function appendWaveformSample(samples: number[], level?: number, maximum = MAX_WAVEFORM_SAMPLES) {
   const normalized = normalizeMetering(level);
   if (normalized === null) return samples;
-  const previous = samples.at(-1) ?? MINIMUM_SAMPLE;
-  const next = [...samples, previous * 0.3 + normalized * 0.7];
+  const next = [...samples, normalized];
   if (next.length <= maximum) return next;
   return next.reduce<number[]>((result, value, index) => {
     if (index % 2 === 0) result.push(value);
-    else result[result.length - 1] = (result[result.length - 1] + value) / 2;
+    else result[result.length - 1] = Math.max(result[result.length - 1], value);
     return result;
   }, []);
 }
@@ -48,7 +47,6 @@ export function resampleWaveform(samples: number[], count: number): number[] {
     const end = Math.max(start + 1, Math.floor(((index + 1) / count) * samples.length));
     const window = samples.slice(start, end);
     const peak = Math.max(MINIMUM_SAMPLE, ...window);
-    const average = window.reduce((sum, value) => sum + value, 0) / window.length;
-    return Math.max(MINIMUM_SAMPLE, Math.min(1, average * 0.2 + peak * 0.8));
+    return Math.max(MINIMUM_SAMPLE, Math.min(1, peak));
   });
 }

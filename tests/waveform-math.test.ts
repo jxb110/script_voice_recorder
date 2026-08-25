@@ -29,12 +29,9 @@ describe("录音波形数据转换", () => {
     expect(bars.at(-1)).toBeGreaterThan(0.7);
   });
 
-  it("重采样同时保留平均能量和峰值，避免相邻柱都呈现相同高度", () => {
+  it("重采样只保留每个显示窗口的峰值，不混入均值", () => {
     const bars = resampleWaveform([0.03, 0.03, 0.9, 0.03, 0.03, 0.45], 2);
-    expect(bars[0]).toBeGreaterThan(0.3);
-    expect(bars[0]).toBeLessThan(0.9);
-    expect(bars[1]).toBeGreaterThan(0.15);
-    expect(bars[0]).not.toBe(bars[1]);
+    expect(bars).toEqual([0.9, 0.45]);
   });
 
   it("将静音段绘制为低平基线，并放大有声段的可观察变化", () => {
