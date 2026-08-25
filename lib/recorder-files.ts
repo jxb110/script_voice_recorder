@@ -12,6 +12,12 @@ const RECORDINGS_DIRECTORY = `${ROOT_DIRECTORY}recordings/`;
 const createId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const cleanFileSegment = (value: string) => value.trim().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_").slice(0, 48) || "未命名";
 
+export function formatRecordingTimestamp(timestamp = Date.now()) {
+  const date = new Date(timestamp);
+  const part = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${part(date.getMonth() + 1)}${part(date.getDate())}-${part(date.getHours())}${part(date.getMinutes())}${part(date.getSeconds())}`;
+}
+
 async function ensureDirectory(uri: string) {
   if (!(await FileSystem.getInfoAsync(uri)).exists) await FileSystem.makeDirectoryAsync(uri, { intermediates: true });
 }
@@ -102,7 +108,7 @@ export async function persistRecording(sourceUri: string, project: ScriptProject
 export async function exportRecordingToPublicWaveDirectory(privateUri: string, project: ScriptProject, speaker: Speaker) {
   if (Platform.OS !== "android") return undefined;
   await requestAllFilesAccess();
-  const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${Date.now()}.wav`;
+  const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${formatRecordingTimestamp()}.wav`;
   const relativePath = `${RECORDINGS_RELATIVE_DIR}/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}/${exportName}`;
   return copyPrivateFileToSharedStorage(privateUri, relativePath);
 }

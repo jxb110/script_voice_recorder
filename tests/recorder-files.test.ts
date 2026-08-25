@@ -11,7 +11,7 @@ vi.mock("expo-media-library", () => ({
 }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 
-import { getPublicAudioAlbumName, parseScriptContent } from "@/lib/recorder-files";
+import { formatRecordingTimestamp, getPublicAudioAlbumName, parseScriptContent } from "@/lib/recorder-files";
 import { createProjectSyncKey } from "@/lib/lan-sync-protocol";
 
 const makeLine = (label: string, prompt: string) => JSON.stringify([
@@ -50,5 +50,9 @@ describe("逐行 JSON TXT 脚本", () => {
   it("将公共音频相册按 record_jxb、发音人和任务名分层命名", () => {
     const name = getPublicAudioAlbumName({ name: "任务 A", sourceFileName: "sample.txt", sentences: [] } as never, { name: "张 三", gender: "女", age: 25 } as never);
     expect(name).toBe("record_jxb/wave/张_三_女_25岁/任务_A");
+  });
+
+  it("将公共录音时间格式化为可读的年月日和时分秒", () => {
+    expect(formatRecordingTimestamp(new Date(2026, 7, 25, 16, 36, 41).getTime())).toBe("20260825-163641");
   });
 });

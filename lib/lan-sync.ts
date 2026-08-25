@@ -22,6 +22,7 @@ import {
 } from "@/lib/lan-sync-protocol";
 
 const HEARTBEAT_MS = 5_000;
+const DEVICE_OFFLINE_AFTER_MS = HEARTBEAT_MS * 3;
 
 type TcpServer = {
   once: (event: "listening" | "error", listener: (() => void) | ((error: Error) => void)) => TcpServer;
@@ -110,6 +111,14 @@ function markDeviceOffline(deviceId: string) {
   if (!device) return;
   replaceDevice({ ...device, detail: "offline", state: "error", updatedAt: now() });
 }
+function refreshHostDevicePresence() {
+  if (session.mode !== "host") return;
+  const expiredBefore = now() - DEVICE_OFFLINE_AFTER_MS;
+  const staleClients = session.devices.filter((device) => device.role === "client" && device.detail !== "offline" && device.updatedAt < expiredBefore);
+  if (!staleClients.length) return;
+  staleClients.forEach((device) => markDeviceOffline(device.id));
+  broadcastWelcome();
+}
 
 export function subscribeLanSync(listener: () => void) { subscribers.add(listener); return () => { subscribers.delete(listener); }; }
 export function subscribeLanSyncCommands(listener: (command: SyncCommand) => void) { commandSubscribers.add(listener); return () => { commandSubscribers.delete(listener); }; }
@@ -144,6 +153,7 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
       server?.listen({ port: LAN_SYNC_PORT, host: "0.0.0.0", reuseAddress: true });
     });
     logDiagnostic("host-listening", `port=${LAN_SYNC_PORT}; bind=0.0.0.0`);
+    heartbeat = setInterval(refreshHostDevicePresence, HEARTBEAT_MS);
     return session;
   } catch (error) {
     stopLanSync();
@@ -386,7 +396,16 @@ function handleHostMessage(peer: Peer, message: SyncMessage) {
     if (!current) return;
     replaceDevice({ ...current, ...message.device, updatedAt: now() });
     broadcastWelcome();
-  } else if (message.type === "ping") sendPeer(peer, { type: "pong", sentAt: message.sentAt });
+  } else if (message.type === "ping") {
+    if (peer.deviceId) {
+      const current = session.devices.find((device) => device.id === peer.deviceId);
+      if (current) {
+        replaceDevice({ ...current, detail: undefined, updatedAt: now() });
+        broadcastWelcome();
+      }
+    }
+    sendPeer(peer, { type: "pong", sentAt: message.sentAt });
+  }
 }
 
 function sendClient(message: SyncMessage) {
