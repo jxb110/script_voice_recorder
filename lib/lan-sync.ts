@@ -211,9 +211,9 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
       if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
       if (!settled) { finish(new Error("主控端在确认同步协议前关闭了连接。请确认两台设备都安装新版 APK。")); return; }
       if (session.mode === "client") {
-        const device = { ...session.self, detail: "offline", state: "error" as const, updatedAt: now() };
-        replaceDevice(device);
-        session = { ...session, error: "与主控端的连接已断开。" };
+        logDiagnostic("client-connection-closed", "session-reset-to-idle");
+        client = null;
+        session = { mode: "idle", self: idleDevice(), devices: [], error: "与主控端的连接已断开。" };
         emit();
       }
     });
