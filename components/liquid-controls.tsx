@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { type PropsWithChildren, useMemo, useRef, useState } from "react";
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { resolveLiquidSliderValue } from "@/lib/liquid-slider";
 
@@ -73,16 +73,24 @@ export function LiquidSlider({ accessibilityLabel, containerStyle, disabled = fa
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: () => !disabled,
     onStartShouldSetPanResponder: () => !disabled,
-    onPanResponderGrant: (event) => { Animated.timing(press, { toValue: 1, duration: 100, useNativeDriver: true }).start(); changeAt(event.nativeEvent.locationX); },
+    onPanResponderGrant: (event) => { Animated.timing(press, { toValue: 1, duration: 130, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(); changeAt(event.nativeEvent.locationX); },
     onPanResponderMove: (event) => { changeAt(event.nativeEvent.locationX); },
-    onPanResponderRelease: () => { Animated.timing(press, { toValue: 0, duration: 180, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
-    onPanResponderTerminate: () => { Animated.timing(press, { toValue: 0, duration: 140, useNativeDriver: true }).start(); onSlidingComplete?.(valueRef.current); },
+    onPanResponderRelease: () => { Animated.timing(press, { toValue: 0, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(); onSlidingComplete?.(valueRef.current); },
+    onPanResponderTerminate: () => { Animated.timing(press, { toValue: 0, duration: 140, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(); onSlidingComplete?.(valueRef.current); },
   }), [disabled, maximumValue, minimumValue, onSlidingComplete, onValueChange, press, step, trackWidth]);
-  const thumbTransform = { transform: [{ scaleX: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.28] }) }, { scaleY: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) }] };
+  const trackHeight = press.interpolate({ inputRange: [0, 1], outputRange: [3, 12] });
+  const thumbHeight = press.interpolate({ inputRange: [0, 1], outputRange: [6, 16] });
+  const thumbWidth = press.interpolate({ inputRange: [0, 1], outputRange: [6, 8] });
+  const thumbRadius = press.interpolate({ inputRange: [0, 1], outputRange: [3, 5] });
+  const thumbMarginLeft = press.interpolate({ inputRange: [0, 1], outputRange: [-3, -4] });
+  const sourceThumbOpacity = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const activeThumbOpacity = press.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const activeTrackOpacity = press.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] });
   return <View accessibilityLabel={accessibilityLabel} accessibilityRole="adjustable" accessibilityState={{ disabled }} onLayout={(event) => { const nextWidth = event.nativeEvent.layout.width; trackWidthRef.current = nextWidth; setTrackWidth((previous) => previous === nextWidth ? previous : nextWidth); }} style={[styles.sliderShell, style, containerStyle, disabled && styles.disabled]} {...panResponder.panHandlers}>
-    <View pointerEvents="none" style={styles.sliderTrack} />
-    <LinearGradient pointerEvents="none" colors={["#0088FF", "#4B6FE6"]} end={{ x: 1, y: 0.5 }} start={{ x: 0, y: 0.5 }} style={[styles.sliderLiquid, { width: `${progress * 100}%` }]} />
-    <Animated.View pointerEvents="none" style={[styles.sliderThumb, { left: `${progress * 100}%` }, thumbTransform]}><View style={styles.sliderThumbHighlight} /></Animated.View>
+    <Animated.View pointerEvents="none" style={[styles.sliderTrack, { borderRadius: thumbRadius, height: trackHeight }]} />
+    <Animated.View pointerEvents="none" style={[styles.sliderLiquid, { borderRadius: thumbRadius, height: trackHeight, opacity: activeTrackOpacity, width: `${progress * 100}%` }]} />
+    <Animated.View pointerEvents="none" style={[styles.sliderSourceThumb, { borderRadius: thumbRadius, height: thumbHeight, left: `${progress * 100}%`, marginLeft: thumbMarginLeft, opacity: sourceThumbOpacity, width: thumbWidth }]} />
+    <Animated.View pointerEvents="none" style={[styles.sliderActiveThumb, { borderRadius: thumbRadius, height: thumbHeight, left: `${progress * 100}%`, marginLeft: thumbMarginLeft, opacity: activeThumbOpacity, width: thumbWidth }]}><View style={styles.sliderThumbSpecular} /></Animated.View>
   </View>;
 }
 
@@ -101,8 +109,9 @@ const styles = StyleSheet.create({
   segmentText: { color: "#65769A", fontSize: 12, fontWeight: "800" },
   segmentTextActive: { color: "#3E60CE", fontWeight: "900" },
   sliderShell: { height: 48, justifyContent: "center", overflow: "visible", position: "relative" },
-  sliderTrack: { backgroundColor: "rgba(120,135,165,0.24)", borderRadius: 99, height: 6, left: 0, position: "absolute", right: 0 },
-  sliderLiquid: { borderRadius: 99, height: 6, left: 0, position: "absolute" },
-  sliderThumb: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.96)", borderColor: "rgba(255,255,255,0.98)", borderRadius: 12, borderWidth: 1, elevation: 4, height: 24, justifyContent: "center", marginLeft: -20, position: "absolute", shadowColor: "#1C315F", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 4, width: 40 },
-  sliderThumbHighlight: { backgroundColor: "rgba(0,136,255,0.5)", borderRadius: 99, height: 4, width: 19 },
+  sliderTrack: { backgroundColor: "rgba(255,255,255,0.2)", left: 0, position: "absolute", right: 0 },
+  sliderLiquid: { backgroundColor: "rgba(255,255,255,0.86)", left: 0, position: "absolute" },
+  sliderSourceThumb: { backgroundColor: "#3F6EE4", elevation: 2, position: "absolute", shadowColor: "#254996", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.26, shadowRadius: 2 },
+  sliderActiveThumb: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.98)", borderColor: "rgba(255,255,255,0.96)", borderWidth: 1, elevation: 5, justifyContent: "center", position: "absolute", shadowColor: "#1C315F", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.23, shadowRadius: 5 },
+  sliderThumbSpecular: { backgroundColor: "rgba(255,255,255,0.78)", borderRadius: 99, height: 3, position: "absolute", top: 2, width: "58%" },
 });
