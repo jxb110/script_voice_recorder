@@ -256,6 +256,23 @@ export function stopLanSync() {
   emit();
 }
 
+/** Removes one connected client without affecting the host room or other client connections. */
+export function removeLanSyncClient(deviceId: string) {
+  if (session.mode !== "host") throw new Error("只有主控端可以移除录音设备。");
+  const target = session.devices.find((device) => device.id === deviceId && device.role === "client");
+  if (!target) throw new Error("该录音设备已离开同步房间。");
+  logDiagnostic("host-client-removed", `device=${target.name}; id=${target.id.slice(0, 8)}`);
+  for (const peer of [...peers]) {
+    if (peer.deviceId !== deviceId) continue;
+    peers.delete(peer);
+    sendPeer(peer, { type: "error", message: "主控已将此设备移出同步房间。" });
+    try { peer.socket.end(); } catch { try { peer.socket.destroy(); } catch { /* ignored */ } }
+  }
+  session = { ...session, devices: session.devices.filter((device) => device.id !== deviceId) };
+  emit();
+  broadcastWelcome();
+}
+
 /** Releases a room only when it belongs to the task being removed or replaced. */
 export function releaseLanSyncForProject(projectKey: string, reason: string) {
   const normalized = normalizeSyncProjectKey(projectKey);

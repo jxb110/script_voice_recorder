@@ -80,7 +80,7 @@ export function parseSyncRoomInvite(raw: string): SyncRoomInvite | null {
 
 export type SyncRole = "host" | "client";
 export type SyncRecordingState = "idle" | "leading" | "recording" | "trailing" | "saving" | "playing" | "error";
-export type SyncCommandName = "start" | "stop" | "previous" | "next" | "play" | "rerecord";
+export type SyncCommandName = "start" | "stop" | "previous" | "next" | "jump" | "play" | "rerecord" | "cancel" | "complete";
 
 export type SyncCommand = {
   id: string;
@@ -154,7 +154,7 @@ function isNumber(value: unknown): value is number { return typeof value === "nu
 function isSyncCommand(value: unknown): value is SyncCommand {
   if (!value || typeof value !== "object") return false;
   const command = value as Record<string, unknown>;
-  return isString(command.id) && isString(command.projectId) && isNumber(command.sentenceIndex) && isNumber(command.executeAt) && isNumber(command.issuedAt) && (command.name === "start" || command.name === "stop" || command.name === "previous" || command.name === "next" || command.name === "play" || command.name === "rerecord");
+  return isString(command.id) && isString(command.projectId) && isNumber(command.sentenceIndex) && isNumber(command.executeAt) && isNumber(command.issuedAt) && (command.name === "start" || command.name === "stop" || command.name === "previous" || command.name === "next" || command.name === "jump" || command.name === "play" || command.name === "rerecord" || command.name === "cancel" || command.name === "complete");
 }
 
 function isSyncDevice(value: unknown): value is SyncDevice {
