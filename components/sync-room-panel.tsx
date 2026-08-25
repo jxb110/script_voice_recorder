@@ -6,18 +6,19 @@ import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity
 import { GlassSurface } from "@/components/liquid-glass";
 import { SyncQrScanner } from "@/components/sync-qr-scanner";
 import { LAN_SYNC_PORT, createSyncRoomInvite, type SyncRecordingState } from "@/lib/lan-sync-protocol";
+import { getSyncRecordingAdmission } from "@/lib/sync-recording-admission";
 import type { LanSyncStatus } from "@/lib/lan-sync";
 import { useSyncRoom } from "@/lib/sync-room-context";
 
-type SyncRoomPanelProps = { projectSyncKey: string; language: "zh" | "en"; onOpenRecording: () => void; onJoinIntentChange?: (joining: boolean) => void };
+type SyncRoomPanelProps = { projectSyncKey: string; sentenceCount: number; language: "zh" | "en"; onOpenRecording: () => void; onJoinIntentChange?: (joining: boolean) => void };
 
 const copyByLanguage = {
-  zh: { title: "多设备同步录音", subtitle: "同一 Wi‑Fi / 主控热点 · 仅局域网", deviceName: "设备名称", create: "创建主控房间", join: "加入已有房间", address: "主控 IP", port: "端口", roomCode: "房间口令", scan: "扫码填充", qrTitle: "同步房间二维码", qrHint: "点击二维码放大；客户端可扫码加入", waiting: "已连接主控，等待同步指令", hostReady: "主控房间已就绪", waitForClient: "请先等待至少一台客户端成功加入房间", open: "进入同步录制", leave: "关闭同步", close: "关闭", hostHint: "让其他设备在同一任务中输入上方 IP、端口和口令即可加入。", joinHint: "每台客户端均需先创建同一录音脚本任务。", connected: "在线", disconnected: "离线", latency: "延迟", error: "同步连接失败", status: "设备状态", removeDevice: "移除录音设备？", removeDeviceHint: (name: string) => `将“${name}”移出当前同步房间。`, remove: "移除", cancel: "取消", state: { idle: "等待指令", ready: "录制界面已就绪", leading: "首端静音", recording: "录制中", trailing: "尾端静音", saving: "保存中", playing: "播放中", error: "异常" } },
+  zh: { title: "多设备同步录音", subtitle: "同一 Wi‑Fi / 主控热点 · 仅局域网", deviceName: "设备名称", create: "创建主控房间", join: "加入已有房间", address: "主控 IP", port: "端口", roomCode: "房间口令", scan: "扫码填充", qrTitle: "同步房间二维码", qrHint: "点击二维码放大；客户端可扫码加入", waiting: "已连接主控，等待同步指令", hostReady: "主控房间已就绪", waitForClient: "无法进入：尚无在线录音设备。请先让至少一台客户端成功加入。", open: "进入同步录制", leave: "关闭同步", close: "关闭", hostHint: "让其他设备在同一任务中输入上方 IP、端口和口令即可加入。", joinHint: "客户端脚本内容和文件名可不同，但录音句数必须与主控一致。", connected: "在线", disconnected: "离线", latency: "延迟", error: "同步连接失败", status: "设备状态", removeDevice: "移除录音设备？", removeDeviceHint: (name: string) => `将“${name}”移出当前同步房间。`, remove: "移除", cancel: "取消", state: { idle: "等待指令", ready: "录制界面已就绪", leading: "首端静音", recording: "录制中", trailing: "尾端静音", saving: "保存中", playing: "播放中", error: "异常" } },
   en: { title: "Multi-device sync", subtitle: "Same Wi-Fi / controller hotspot · LAN only", deviceName: "Device name", create: "Create controller room", join: "Join controller room", address: "Controller IP", port: "Port", roomCode: "Room code", scan: "Scan QR", qrTitle: "Sync room QR code", qrHint: "Tap to enlarge; clients can scan to join", waiting: "Connected to controller. Waiting for commands.", hostReady: "Controller room is ready", waitForClient: "Wait for at least one client to join this room.", open: "Open sync recording", leave: "Stop sync", close: "Close", hostHint: "On the same task, enter the IP, port and room code above on each client device.", joinHint: "Each client must first create a task from the same recording script.", connected: "Online", disconnected: "Offline", latency: "Latency", error: "Unable to connect sync room", status: "Device status", removeDevice: "Remove recording device?", removeDeviceHint: (name: string) => `Remove “${name}” from this sync room.`, remove: "Remove", cancel: "Cancel", state: { idle: "Waiting", ready: "Recording screen ready", leading: "Leading silence", recording: "Recording", trailing: "Trailing silence", saving: "Saving", playing: "Playing", error: "Error" } },
 } as const;
 type SyncPanelCopy = (typeof copyByLanguage)[keyof typeof copyByLanguage];
 
-export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoinIntentChange }: SyncRoomPanelProps) {
+export function SyncRoomPanel({ projectSyncKey, sentenceCount, language, onOpenRecording, onJoinIntentChange }: SyncRoomPanelProps) {
   const copy = copyByLanguage[language];
   const { status, hostRoom, joinRoom, leaveRoom, removeClient } = useSyncRoom();
   const [deviceName, setDeviceName] = useState(language === "zh" ? "录音设备" : "Recording device");
@@ -58,7 +59,7 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
     onJoinIntentChange?.(false);
     setWorking(true);
     try {
-      const next = await hostRoom({ projectId: projectSyncKey, deviceName });
+      const next = await hostRoom({ projectId: projectSyncKey, sentenceCount, deviceName });
       setHostSnapshot(next);
       setExpanded(true);
     } catch (error) {
@@ -70,7 +71,7 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   const join = async () => {
     setWorking(true);
     try {
-      await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion });
+      await joinRoom({ host, port, roomCode, projectId: roomProjectKey, sentenceCount, deviceName, inviteVersion });
       setExpanded(true);
     } catch (error) {
       Alert.alert(copy.error, error instanceof Error ? error.message : copy.error);
@@ -112,15 +113,20 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
 
 function ActiveRoom({ copy, invite, status, onOpenRecording, onLeave, onRemoveClient, onShowQr }: { copy: SyncPanelCopy; invite: string | null; status: LanSyncStatus; onOpenRecording: () => void; onLeave: () => void; onRemoveClient: (deviceId: string) => void; onShowQr: () => void }) {
   const isHost = status.mode === "host";
-  const onlineClients = useMemo(() => status.devices.filter((device) => device.role === "client" && device.detail !== "offline" && device.state !== "error"), [status.devices]);
   const visibleDevices = useMemo(() => isHost ? status.devices.filter((device) => device.role === "client") : status.devices.filter((device) => device.id !== status.self.id), [isHost, status.devices, status.self.id]);
-  const canOpenRecording = onlineClients.length > 0;
+  const admission = useMemo(() => getSyncRecordingAdmission(status.devices, status.sentenceCount), [status.devices, status.sentenceCount]);
+  const canOpenRecording = admission.allowed;
+  const admissionHint = (() => {
+    if (status.error) return status.error;
+    if (!admission.allowed && admission.reason === "sentence-count-mismatch") return `无法进入：主控 ${admission.hostSentenceCount} 句，${admission.device.name} ${admission.clientSentenceCount ?? "未知"} 句。`;
+    return copy.waitForClient;
+  })();
   const confirmRemove = (device: LanSyncStatus["devices"][number]) => Alert.alert(copy.removeDevice, copy.removeDeviceHint(device.name), [{ text: copy.cancel, style: "cancel" }, { text: copy.remove, style: "destructive", onPress: () => { try { onRemoveClient(device.id); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } } }]);
   return <><View style={[styles.statusLine, compactStyles.statusLine]}><View style={styles.statusDot} /><Text style={styles.statusText}>{isHost ? copy.hostReady : copy.waiting}</Text></View>
     <View style={[styles.connectionCard, compactStyles.connectionCard]}><Text style={[styles.connectionLabel, compactStyles.connectionLabel]}>{copy.address}</Text><Text numberOfLines={1} selectable style={[styles.connectionValue, compactStyles.connectionValue]}>{status.address}</Text><Text style={[styles.connectionLabel, compactStyles.connectionLabel]}>{copy.roomCode}</Text><Text selectable style={[styles.roomCode, compactStyles.roomCode]}>{status.roomCode}</Text></View>
     {isHost ? invite ? <TouchableOpacity activeOpacity={0.8} onPress={onShowQr} style={[styles.inviteCard, compactStyles.inviteCard]}><View style={styles.qrFrame}><QRCode backgroundColor="#FFFFFF" color="#274B9B" size={56} value={invite} /></View><View style={styles.inviteCopy}><Text style={styles.inviteTitle}>{copy.qrTitle}</Text><Text numberOfLines={1} style={styles.inviteHint}>{copy.qrHint}</Text></View><MaterialIcons color="#4669DE" name="open-in-full" size={18} /></TouchableOpacity> : null : <Text numberOfLines={1} style={[styles.hint, compactStyles.hint]}>{copy.joinHint}</Text>}
     <View style={[styles.deviceTitleRow, compactStyles.deviceTitleRow]}><Text style={styles.deviceTitle}>{copy.status}</Text><Text style={styles.deviceCount}>{visibleDevices.length}</Text></View><ScrollView nestedScrollEnabled persistentScrollbar showsVerticalScrollIndicator style={[styles.deviceListViewport, compactStyles.deviceListViewport]} contentContainerStyle={styles.deviceListContent}>{visibleDevices.map((device) => <DeviceRow copy={copy} device={device} key={device.id} onRemove={isHost && device.role === "client" ? () => confirmRemove(device) : undefined} />)}</ScrollView>
-    {isHost ? <><TouchableOpacity disabled={!canOpenRecording} onPress={onOpenRecording} style={[styles.openButton, compactStyles.openButton, !canOpenRecording && styles.openButtonDisabled]}><MaterialIcons color="#FFFFFF" name="mic" size={19} /><Text style={styles.primaryText}>{copy.open}</Text></TouchableOpacity>{!canOpenRecording ? <Text style={[styles.waitingClientHint, compactStyles.waitingClientHint]}>{copy.waitForClient}</Text> : null}</> : <><TouchableOpacity disabled style={[styles.openButton, compactStyles.openButton, styles.openButtonDisabled]}><MaterialIcons color="#FFFFFF" name="mic" size={19} /><Text style={styles.primaryText}>{copy.open}</Text></TouchableOpacity><Text style={[styles.waitingClientHint, compactStyles.waitingClientHint]}>{copy.waiting}</Text></>}
+    {isHost ? <><TouchableOpacity disabled={!canOpenRecording} onPress={onOpenRecording} style={[styles.openButton, compactStyles.openButton, !canOpenRecording && styles.openButtonDisabled]}><MaterialIcons color="#FFFFFF" name="mic" size={19} /><Text style={styles.primaryText}>{copy.open}</Text></TouchableOpacity>{!canOpenRecording ? <Text style={[styles.waitingClientHint, compactStyles.waitingClientHint]}>{admissionHint}</Text> : null}</> : <><TouchableOpacity disabled style={[styles.openButton, compactStyles.openButton, styles.openButtonDisabled]}><MaterialIcons color="#FFFFFF" name="mic" size={19} /><Text style={styles.primaryText}>{copy.open}</Text></TouchableOpacity><Text style={[styles.waitingClientHint, compactStyles.waitingClientHint]}>{copy.waiting}</Text></>}
     <CloseSyncButton label={copy.leave} onPress={onLeave} />
   </>;
 }

@@ -10,6 +10,7 @@ import {
   createLanSyncAddress,
   createRoomCode,
   createSyncCommand,
+  getSyncProjectSentenceCount,
   normalizeSyncProjectKey,
   normalizeSyncRoomCode,
   normalizeLanSocketChunk,
@@ -48,11 +49,12 @@ export type LanSyncStatus = {
   devices: SyncDevice[];
   error?: string;
   lastCommand?: SyncCommand;
+  sentenceCount?: number;
 };
 export type LanSyncDiagnostic = { at: number; mode: SyncMode; event: string; detail?: string };
 
-export type LanSyncJoinInput = { host: string; port: string | number; roomCode: string; projectId: string; deviceName: string; inviteVersion?: number };
-export type LanSyncHostInput = { projectId: string; deviceName: string };
+export type LanSyncJoinInput = { host: string; port: string | number; roomCode: string; projectId: string; sentenceCount: number; deviceName: string; inviteVersion?: number };
+export type LanSyncHostInput = { projectId: string; sentenceCount: number; deviceName: string };
 export type LanSyncStateUpdate = Pick<SyncDevice, "state" | "sentenceIndex"> & Pick<SyncDevice, "detail">;
 
 let nativeTcp: TcpFactory | null = null;
@@ -138,8 +140,9 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
   await forceResetLanSync("host-recreate");
   const ip = await Network.getIpAddressAsync();
   if (!ip || ip === "0.0.0.0") throw new Error("未能读取局域网地址。请连接同一 Wi-Fi 或开启热点后重试。");
-  const self = createDevice(input.deviceName, "host");
-  session = { mode: "host", roomCode: normalizeSyncRoomCode(createRoomCode()), address: `${ip}:${LAN_SYNC_PORT}`, projectId: hostProjectKey, self, devices: [self] };
+  if (!Number.isInteger(input.sentenceCount) || input.sentenceCount < 1) throw new Error("主控录音任务没有可同步的句子。");
+  const self = { ...createDevice(input.deviceName, "host"), sentenceCount: input.sentenceCount };
+  session = { mode: "host", roomCode: normalizeSyncRoomCode(createRoomCode()), address: `${ip}:${LAN_SYNC_PORT}`, projectId: hostProjectKey, sentenceCount: input.sentenceCount, self, devices: [self] };
   logDiagnostic("host-room-created", `address=${session.address}; invite=v2; room=${maskedRoomCode(session.roomCode)}; ${keyFingerprint(hostProjectKey)}`);
   emit();
   const tcp = getTcp();
@@ -188,11 +191,12 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
   catch (error) { return Promise.reject(error instanceof Error ? error : new Error("主控地址无效。")); }
   const endpoint = splitLanEndpoint(address);
   stopLanSync();
-  const self = createDevice(input.deviceName, "client");
+  if (!Number.isInteger(input.sentenceCount) || input.sentenceCount < 1) return Promise.reject(new Error("当前录音任务没有可同步的句子。"));
+  const self = { ...createDevice(input.deviceName, "client"), sentenceCount: input.sentenceCount };
   const clientRoomCode = normalizeSyncRoomCode(input.roomCode);
   const clientProjectKey = normalizeSyncProjectKey(input.projectId);
   if (!clientRoomCode || !clientProjectKey) return Promise.reject(new Error("二维码中的房间口令或同步任务键无效。请让主控重新生成二维码。"));
-  session = { mode: "idle", roomCode: clientRoomCode, address: `${endpoint.host}:${endpoint.port}`, projectId: clientProjectKey, self, devices: [], error: undefined };
+  session = { mode: "idle", roomCode: clientRoomCode, address: `${endpoint.host}:${endpoint.port}`, projectId: clientProjectKey, sentenceCount: input.sentenceCount, self, devices: [], error: undefined };
   logDiagnostic("client-join-requested", `address=${session.address}; invite=v${input.inviteVersion ?? 0}; room=${maskedRoomCode(session.roomCode)}; ${keyFingerprint(clientProjectKey)}`);
   emit();
 
@@ -231,7 +235,7 @@ export function joinLanSyncRoom(input: LanSyncJoinInput): Promise<LanSyncStatus>
           if (line !== LAN_SYNC_NATIVE_PROTOCOL) { finish(new Error(`主控同步协议不匹配：${line || "未收到协议确认"}`)); return; }
           transport.protocolReady = true;
           logDiagnostic("client-protocol-confirmed", line);
-          sendClient({ type: "hello", roomCode: session.roomCode ?? "", projectId: session.projectId ?? "", deviceId: self.id, deviceName: self.name, sentAt: now() });
+          sendClient({ type: "hello", roomCode: session.roomCode ?? "", projectId: session.projectId ?? "", deviceId: self.id, deviceName: self.name, sentenceCount: session.sentenceCount ?? 0, sentAt: now() });
           return;
         }
         const message = parseSyncMessage(line);
@@ -367,7 +371,7 @@ function handleHostConnection(socket: TcpSocket) {
 function handleClientMessage(message: SyncMessage, finish: (error?: Error) => void) {
   if (message.type === "welcome") {
     logDiagnostic("client-welcome-received", `room=${maskedRoomCode(message.roomCode)}; ${keyFingerprint(message.projectId)}; devices=${message.devices.length}`);
-    session = { ...session, mode: "client", roomCode: message.roomCode, projectId: message.projectId, devices: message.devices, error: undefined };
+    session = { ...session, mode: "client", roomCode: message.roomCode, devices: message.devices, error: undefined };
     emit();
     if (!heartbeat) heartbeat = setInterval(() => sendClient({ type: "ping", sentAt: now() }), HEARTBEAT_MS);
     finish();
@@ -382,13 +386,15 @@ function handleHostMessage(peer: Peer, message: SyncMessage) {
     const hostRoomCode = session.roomCode;
     const hostProjectKey = session.projectId;
     const roomMatches = normalizeSyncRoomCode(message.roomCode) === normalizeSyncRoomCode(hostRoomCode);
-    const taskMatches = normalizeSyncProjectKey(message.projectId) === normalizeSyncProjectKey(hostProjectKey);
-    logDiagnostic("host-hello-received", `roomMatch=${roomMatches}; taskMatch=${taskMatches}; incoming=${keyFingerprint(message.projectId)}; host=${keyFingerprint(hostProjectKey)}`);
+    const hostSentenceCount = session.sentenceCount ?? getSyncProjectSentenceCount(hostProjectKey);
+    const taskMatches = hostSentenceCount !== undefined && message.sentenceCount === hostSentenceCount;
+    logDiagnostic("host-hello-received", `roomMatch=${roomMatches}; sentenceMatch=${taskMatches}; incoming=${message.sentenceCount}; host=${hostSentenceCount}`);
     if (!roomMatches) { logDiagnostic("host-hello-rejected", "reason=room-code-mismatch"); sendPeer(peer, { type: "error", message: "房间口令不匹配。请重新扫描主控二维码。" }); peer.socket.end(); return; }
-    if (!taskMatches) { logDiagnostic("host-hello-rejected", "reason=sync-task-key-mismatch"); sendPeer(peer, { type: "error", message: "同步任务键不匹配。请使用主控重新生成的二维码扫码加入。" }); peer.socket.end(); return; }
+    if (!taskMatches) { const reason = `录音句数不一致：主控 ${hostSentenceCount ?? "未知"} 句，当前设备 ${message.sentenceCount} 句。`; logDiagnostic("host-hello-rejected", `reason=sentence-count-mismatch; ${reason}`); session = { ...session, error: reason }; emit(); sendPeer(peer, { type: "error", message: reason }); peer.socket.end(); return; }
     peer.deviceId = message.deviceId;
     logDiagnostic("host-client-accepted", `device=${message.deviceName}; id=${message.deviceId.slice(0, 8)}`);
-    replaceDevice({ id: message.deviceId, name: message.deviceName, role: "client", state: "idle", sentenceIndex: 0, connectedAt: now(), updatedAt: now() });
+    session = { ...session, error: undefined };
+    replaceDevice({ id: message.deviceId, name: message.deviceName, role: "client", state: "idle", sentenceIndex: 0, connectedAt: now(), updatedAt: now(), sentenceCount: message.sentenceCount });
     sendPeer(peer, { type: "welcome", roomCode: hostRoomCode, projectId: hostProjectKey, serverTime: now(), devices: session.devices });
     broadcastWelcome();
   } else if (message.type === "device-state" && peer.deviceId === message.device.id) {

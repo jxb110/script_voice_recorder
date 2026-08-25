@@ -6,10 +6,11 @@ import type { SyncCommand } from "@/lib/lan-sync-protocol";
 const command = (name: SyncCommand["name"], projectId = "v3|sample.txt|2|abc12345"): SyncCommand => ({ id: "cmd_1", name, projectId, sentenceIndex: 1, issuedAt: 1_000, executeAt: 1_850 });
 
 describe("同步客户端录制导航", () => {
-  it("仅在同一任务收到主控 open 指令时进入同步录制", () => {
+  it("仅在句数一致时收到主控 open 指令进入同步录制", () => {
     expect(shouldClientOpenSyncRecording("client", "v3|sample.txt|2|abc12345", "v3|sample.txt|2|abc12345", command("open"))).toBe(true);
+    expect(shouldClientOpenSyncRecording("client", "v3|controller.txt|2|fff00000", "v3|client.txt|2|11122233", command("open", "v3|controller.txt|2|fff00000"))).toBe(true);
     expect(shouldClientOpenSyncRecording("host", "v3|sample.txt|2|abc12345", "v3|sample.txt|2|abc12345", command("open"))).toBe(false);
     expect(shouldClientOpenSyncRecording("client", "v3|sample.txt|2|abc12345", "v3|sample.txt|2|abc12345", command("start"))).toBe(false);
-    expect(shouldClientOpenSyncRecording("client", "v3|sample.txt|2|abc12345", "v3|other.txt|2|abc12345", command("open"))).toBe(false);
+    expect(shouldClientOpenSyncRecording("client", "v3|sample.txt|2|abc12345", "v3|other.txt|3|abc12345", command("open", "v3|sample.txt|2|abc12345"))).toBe(false);
   });
 });

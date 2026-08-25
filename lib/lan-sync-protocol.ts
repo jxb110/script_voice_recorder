@@ -101,6 +101,7 @@ export type SyncDevice = {
   updatedAt: number;
   latencyMs?: number;
   detail?: string;
+  sentenceCount?: number;
 };
 
 function normalizeScriptKeyText(value: string) {
@@ -117,7 +118,7 @@ function stableKeyChecksum(value: string) {
 }
 
 export type SyncMessage =
-  | { type: "hello"; roomCode: string; projectId: string; deviceId: string; deviceName: string; sentAt: number }
+  | { type: "hello"; roomCode: string; projectId: string; deviceId: string; deviceName: string; sentenceCount: number; sentAt: number }
   | { type: "welcome"; roomCode: string; projectId: string; serverTime: number; devices: SyncDevice[] }
   | { type: "command"; command: SyncCommand }
   | { type: "device-state"; device: Omit<SyncDevice, "role" | "connectedAt">; sentAt: number }
@@ -135,6 +136,12 @@ export function createProjectSyncKey(sourceFileName: string, sentences: Array<{ 
   return `v3|${source}|${sentences.length}|${stableKeyChecksum(text)}`;
 }
 
+export function getSyncProjectSentenceCount(projectKey: string) {
+  const parts = normalizeSyncProjectKey(projectKey).split("|");
+  const count = Number(parts.at(-2));
+  return Number.isInteger(count) && count >= 0 ? count : undefined;
+}
+
 export function createSyncCommand(input: Omit<SyncCommand, "id" | "issuedAt" | "executeAt">, now = Date.now()): SyncCommand {
   return { ...input, id: `cmd_${now}_${Math.random().toString(36).slice(2, 8)}`, issuedAt: now, executeAt: now + LAN_SYNC_EXECUTION_LEAD_MS };
 }
@@ -144,8 +151,8 @@ export function parseSyncMessage(raw: string): SyncMessage | null {
     const value = JSON.parse(raw) as unknown;
     if (!value || typeof value !== "object" || !("type" in value) || typeof value.type !== "string") return null;
     const message = value as Record<string, unknown>;
-    if (message.type === "hello" && isString(message.roomCode) && isString(message.projectId) && isString(message.deviceId) && isString(message.deviceName) && isNumber(message.sentAt)) {
-      return { type: "hello", roomCode: message.roomCode, projectId: message.projectId, deviceId: message.deviceId, deviceName: message.deviceName, sentAt: message.sentAt };
+    if (message.type === "hello" && isString(message.roomCode) && isString(message.projectId) && isString(message.deviceId) && isString(message.deviceName) && isNonNegativeInteger(message.sentenceCount) && isNumber(message.sentAt)) {
+      return { type: "hello", roomCode: message.roomCode, projectId: message.projectId, deviceId: message.deviceId, deviceName: message.deviceName, sentenceCount: message.sentenceCount, sentAt: message.sentAt };
     }
     if (message.type === "welcome" && isString(message.roomCode) && isString(message.projectId) && isNumber(message.serverTime) && Array.isArray(message.devices) && message.devices.every(isSyncDevice)) {
       return { type: "welcome", roomCode: message.roomCode, projectId: message.projectId, serverTime: message.serverTime, devices: message.devices };
@@ -162,6 +169,7 @@ export function parseSyncMessage(raw: string): SyncMessage | null {
 
 function isString(value: unknown): value is string { return typeof value === "string" && value.length > 0; }
 function isNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
+function isNonNegativeInteger(value: unknown): value is number { return isNumber(value) && Number.isInteger(value) && value >= 0; }
 
 function isSyncCommand(value: unknown): value is SyncCommand {
   if (!value || typeof value !== "object") return false;
@@ -172,7 +180,7 @@ function isSyncCommand(value: unknown): value is SyncCommand {
 function isSyncDevice(value: unknown): value is SyncDevice {
   if (!value || typeof value !== "object") return false;
   const device = value as Record<string, unknown>;
-  return isString(device.id) && isString(device.name) && (device.role === "host" || device.role === "client") && isRecordingState(device.state) && isNumber(device.sentenceIndex) && isNumber(device.connectedAt) && isNumber(device.updatedAt) && (device.latencyMs === undefined || isNumber(device.latencyMs)) && (device.detail === undefined || typeof device.detail === "string");
+  return isString(device.id) && isString(device.name) && (device.role === "host" || device.role === "client") && isRecordingState(device.state) && isNumber(device.sentenceIndex) && isNumber(device.connectedAt) && isNumber(device.updatedAt) && (device.latencyMs === undefined || isNumber(device.latencyMs)) && (device.detail === undefined || typeof device.detail === "string") && (device.sentenceCount === undefined || isNonNegativeInteger(device.sentenceCount));
 }
 
 function isDeviceUpdate(value: unknown): value is Omit<SyncDevice, "role" | "connectedAt"> {

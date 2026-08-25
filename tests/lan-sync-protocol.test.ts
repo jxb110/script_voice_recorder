@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LAN_SYNC_EXECUTION_LEAD_MS, LAN_SYNC_NATIVE_PROTOCOL, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_EXECUTION_LEAD_MS, LAN_SYNC_NATIVE_PROTOCOL, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, getSyncProjectSentenceCount, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
 
 describe("LAN sync protocol", () => {
   it("normalizes Android decimal byte-list socket payloads before parsing handshake responses", () => {
@@ -39,6 +39,12 @@ describe("LAN sync protocol", () => {
     expect(new Set(keys).size).toBe(1);
   });
 
+  it("extracts sentence count without requiring matching name or content checksum", () => {
+    expect(getSyncProjectSentenceCount("v3|host-script.txt|120|aabbccdd")).toBe(120);
+    expect(getSyncProjectSentenceCount("v3|other-script.txt|120|11223344")).toBe(120);
+    expect(getSyncProjectSentenceCount("invalid-key")).toBeUndefined();
+  });
+
   it("accepts complete commands and rejects malformed network payloads", () => {
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_1", name: "complete", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "complete" } });
     expect(parseSyncMessage(JSON.stringify({ type: "command", command: { id: "command_2", name: "cancel", projectId: "project_a", sentenceIndex: 2, executeAt: 1_850, issuedAt: 1_000 } }))).toMatchObject({ type: "command", command: { name: "cancel" } });
@@ -49,6 +55,12 @@ describe("LAN sync protocol", () => {
 
   it("accepts a ready device state from a recording screen", () => {
     expect(parseSyncMessage(JSON.stringify({ type: "device-state", device: { id: "device_a", name: "录音设备 A", state: "ready", sentenceIndex: 3, updatedAt: 2_000 }, sentAt: 2_000 }))).toMatchObject({ type: "device-state", device: { state: "ready" } });
+  });
+
+  it("accepts a hello payload carrying the client sentence count", () => {
+    const hello = { type: "hello", roomCode: "AB12CD", projectId: "v3|other.txt|3|ff00aa11", deviceId: "device_a", deviceName: "设备 A", sentenceCount: 3, sentAt: 2_000 };
+    expect(parseSyncMessage(JSON.stringify(hello))).toMatchObject({ type: "hello", sentenceCount: 3 });
+    expect(parseSyncMessage(JSON.stringify({ ...hello, sentenceCount: undefined }))).toBeNull();
   });
 
   it("creates a WebSocket endpoint from a separate host and port", () => {
