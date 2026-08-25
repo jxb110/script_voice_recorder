@@ -31,22 +31,25 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   const [expanded, setExpanded] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [locallyDismissed, setLocallyDismissed] = useState(false);
   const roomProjectKey = inviteProjectSyncKey || projectSyncKey;
-  const activeForProject = status.mode !== "idle" && (status.projectId === roomProjectKey || status.mode === "client");
-  const activeElsewhere = status.mode !== "idle" && !activeForProject;
-  const invite = status.mode === "host" && status.address && status.roomCode && status.projectId ? createSyncRoomInvite(status.address, status.roomCode, status.projectId) : null;
+  const visibleMode = locallyDismissed ? "idle" : status.mode;
+  const activeForProject = visibleMode !== "idle" && (status.projectId === roomProjectKey || visibleMode === "client");
+  const activeElsewhere = visibleMode !== "idle" && !activeForProject;
+  const invite = visibleMode === "host" && status.address && status.roomCode && status.projectId ? createSyncRoomInvite(status.address, status.roomCode, status.projectId) : null;
 
   useEffect(() => { onJoinIntentChange?.(showJoin); }, [onJoinIntentChange, showJoin]);
-  const startHost = async () => { setWorking(true); try { await hostRoom({ projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const closeRoom = () => { leaveRoom(); setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
+  useEffect(() => { if (status.mode === "idle") setLocallyDismissed(false); }, [status.mode]);
+  const startHost = async () => { setLocallyDismissed(false); setWorking(true); try { await hostRoom({ projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
+  const join = async () => { setLocallyDismissed(false); setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
+  const closeRoom = () => { setLocallyDismissed(true); leaveRoom(); setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
   const cancelJoin = () => { setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
   const applyInvite = (next: { host: string; port: number; roomCode: string; projectSyncKey?: string; version: number }) => { setHost(next.host); setPort(String(next.port)); setRoomCode(next.roomCode); setInviteProjectSyncKey(next.projectSyncKey ?? ""); setInviteVersion(next.version); setShowJoin(true); setShowScanner(false); };
   const exportDiagnostics = async () => { await Share.share({ title: copy.diagnostics, message: getLanSyncDiagnosticsText() }); };
 
   return <><GlassSurface intensity={34} style={styles.card}>
     <TouchableOpacity activeOpacity={0.72} onPress={() => setExpanded((value) => !value)} style={styles.heading}>
-      <View style={styles.icon}><MaterialIcons color="#4669DE" name="sensors" size={21} /></View><View style={styles.headingCopy}><Text style={styles.title}>{copy.title}</Text><Text numberOfLines={1} style={styles.subtitle}>{!expanded && activeForProject ? `${status.devices.length} ${copy.status}` : copy.subtitle}</Text></View><View style={[styles.modeBadge, status.mode === "host" ? styles.hostBadge : status.mode === "client" ? styles.clientBadge : styles.idleBadge]}><Text style={styles.modeBadgeText}>{status.mode === "host" ? "HOST" : status.mode === "client" ? "CLIENT" : "LAN"}</Text></View><MaterialIcons color="#61749E" name={expanded ? "expand-less" : "expand-more"} size={22} style={styles.expandIcon} />
+      <View style={styles.icon}><MaterialIcons color="#4669DE" name="sensors" size={21} /></View><View style={styles.headingCopy}><Text style={styles.title}>{copy.title}</Text><Text numberOfLines={1} style={styles.subtitle}>{!expanded && activeForProject ? `${status.devices.length} ${copy.status}` : copy.subtitle}</Text></View><View style={[styles.modeBadge, visibleMode === "host" ? styles.hostBadge : visibleMode === "client" ? styles.clientBadge : styles.idleBadge]}><Text style={styles.modeBadgeText}>{visibleMode === "host" ? "HOST" : visibleMode === "client" ? "CLIENT" : "LAN"}</Text></View><MaterialIcons color="#61749E" name={expanded ? "expand-less" : "expand-more"} size={22} style={styles.expandIcon} />
     </TouchableOpacity>
     {!expanded ? null : activeElsewhere ? <><Text style={styles.notice}>{copy.invalidRoom}</Text><CloseSyncButton label={copy.leave} onPress={closeRoom} /></> : activeForProject ? <ActiveRoom copy={copy} invite={invite} onExportDiagnostics={() => void exportDiagnostics()} onLeave={closeRoom} onOpenRecording={onOpenRecording} onShowQr={() => setShowQr(true)} status={status} /> : <>
       <TextInput editable={!working} onChangeText={setDeviceName} placeholder={copy.deviceName} placeholderTextColor="#8290AB" style={styles.input} value={deviceName} />
