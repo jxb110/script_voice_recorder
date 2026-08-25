@@ -17,10 +17,24 @@ const SyncRoomContext = createContext<SyncRoomContextValue | null>(null);
 
 export function SyncRoomProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState(getLanSyncStatus());
-  useEffect(() => subscribeLanSync(() => setStatus(getLanSyncStatus())), []);
-  const hostRoom = useCallback((input: LanSyncHostInput) => startLanSyncHost(input), []);
-  const joinRoom = useCallback((input: LanSyncJoinInput) => joinLanSyncRoom(input), []);
-  const leaveRoom = useCallback(() => stopLanSync(), []);
+  const publishStatus = useCallback((next: LanSyncStatus = getLanSyncStatus()) => {
+    setStatus({ ...next, devices: [...next.devices] });
+  }, []);
+  useEffect(() => subscribeLanSync(() => publishStatus()), [publishStatus]);
+  const hostRoom = useCallback(async (input: LanSyncHostInput) => {
+    const next = await startLanSyncHost(input);
+    publishStatus(next);
+    return next;
+  }, [publishStatus]);
+  const joinRoom = useCallback(async (input: LanSyncJoinInput) => {
+    const next = await joinLanSyncRoom(input);
+    publishStatus(next);
+    return next;
+  }, [publishStatus]);
+  const leaveRoom = useCallback(() => {
+    stopLanSync();
+    publishStatus();
+  }, [publishStatus]);
   const sendCommand = useCallback((name: SyncCommandName, sentenceIndex: number) => sendLanSyncCommand(name, sentenceIndex), []);
   const reportState = useCallback((update: LanSyncStateUpdate) => reportLanSyncState(update), []);
   const subscribeCommands = useCallback((listener: (command: SyncCommand) => void) => subscribeLanSyncCommands(listener), []);

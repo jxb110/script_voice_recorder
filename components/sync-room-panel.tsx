@@ -37,6 +37,9 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   const invite = visibleMode === "host" && status.address && status.roomCode && status.projectId ? createSyncRoomInvite(status.address, status.roomCode, status.projectId) : null;
 
   useEffect(() => { onJoinIntentChange?.(showJoin); }, [onJoinIntentChange, showJoin]);
+  useEffect(() => {
+    if (status.mode === "host") setExpanded(true);
+  }, [status.mode]);
   const startHost = async () => { setWorking(true); try { await hostRoom({ projectId: projectSyncKey, deviceName }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
   const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
   const closeRoom = () => { leaveRoom(); setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
