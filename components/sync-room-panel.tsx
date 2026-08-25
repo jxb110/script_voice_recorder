@@ -1,13 +1,13 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import QRCode from "react-native-qrcode-svg";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Modal, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { GlassSurface } from "@/components/liquid-glass";
 import { SyncQrScanner } from "@/components/sync-qr-scanner";
 import { LAN_SYNC_PORT, createSyncRoomInvite, type SyncRecordingState } from "@/lib/lan-sync-protocol";
 import { useSyncRoom } from "@/lib/sync-room-context";
-import { getLanSyncDiagnosticsText, type LanSyncStatus } from "@/lib/lan-sync";
+import type { LanSyncStatus } from "@/lib/lan-sync";
 
 type SyncRoomPanelProps = { projectSyncKey: string; language: "zh" | "en"; onOpenRecording: () => void; onJoinIntentChange?: (joining: boolean) => void };
 
@@ -48,28 +48,39 @@ export function SyncRoomPanel({ projectSyncKey, language, onOpenRecording, onJoi
   }, [displayStatus.mode]);
   const startHost = async () => { setWorking(true); try { const next = await hostRoom({ projectId: projectSyncKey, deviceName }); setHostSnapshot(next); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
   const join = async () => { setWorking(true); try { await joinRoom({ host, port, roomCode, projectId: roomProjectKey, deviceName, inviteVersion }); setExpanded(true); } catch (error) { Alert.alert(copy.error, error instanceof Error ? error.message : copy.error); } finally { setWorking(false); } };
-  const closeRoom = () => { leaveRoom(); setHostSnapshot(null); setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
+  const closeRoom = () => {
+    leaveRoom();
+    setHostSnapshot(null);
+    setShowJoin(false);
+    setHost("");
+    setPort(String(LAN_SYNC_PORT));
+    setRoomCode("");
+    setInviteProjectSyncKey("");
+    setInviteVersion(undefined);
+    setShowQr(false);
+    setShowScanner(false);
+    setExpanded(false);
+    onJoinIntentChange?.(false);
+  };
   const cancelJoin = () => { setShowJoin(false); setInviteProjectSyncKey(""); setInviteVersion(undefined); setExpanded(false); onJoinIntentChange?.(false); };
   const applyInvite = (next: { host: string; port: number; roomCode: string; projectSyncKey?: string; version: number }) => { setHost(next.host); setPort(String(next.port)); setRoomCode(next.roomCode); setInviteProjectSyncKey(next.projectSyncKey ?? ""); setInviteVersion(next.version); setShowJoin(true); setShowScanner(false); };
-  const exportDiagnostics = async () => { await Share.share({ title: copy.diagnostics, message: getLanSyncDiagnosticsText() }); };
 
   return <><GlassSurface intensity={34} style={styles.card}>
     <TouchableOpacity activeOpacity={0.72} onPress={() => setExpanded((value) => !value)} style={styles.heading}>
       <View style={styles.icon}><MaterialIcons color="#4669DE" name="sensors" size={21} /></View><View style={styles.headingCopy}><Text style={styles.title}>{copy.title}</Text><Text numberOfLines={1} style={styles.subtitle}>{!expanded && activeForProject ? `${displayStatus.devices.length} ${copy.status}` : copy.subtitle}</Text></View><View style={[styles.modeBadge, visibleMode === "host" ? styles.hostBadge : visibleMode === "client" ? styles.clientBadge : styles.idleBadge]}><Text style={styles.modeBadgeText}>{visibleMode === "host" ? "HOST" : visibleMode === "client" ? "CLIENT" : "LAN"}</Text></View><MaterialIcons color="#61749E" name={expanded ? "expand-less" : "expand-more"} size={22} style={styles.expandIcon} />
     </TouchableOpacity>
-    {!expanded ? null : activeForProject ? <ActiveRoom copy={copy} invite={invite} onExportDiagnostics={() => void exportDiagnostics()} onLeave={closeRoom} onOpenRecording={onOpenRecording} onShowQr={() => setShowQr(true)} status={displayStatus} /> : <>
+    {!expanded ? null : activeForProject ? <ActiveRoom copy={copy} invite={invite} onLeave={closeRoom} onOpenRecording={onOpenRecording} onShowQr={() => setShowQr(true)} status={displayStatus} /> : <>
       <TextInput editable={!working} onChangeText={setDeviceName} placeholder={copy.deviceName} placeholderTextColor="#8290AB" style={styles.input} value={deviceName} />
       {showJoin ? <View style={styles.joinFields}><View style={styles.endpointRow}><TextInput autoCapitalize="none" autoCorrect={false} editable={!working} keyboardType="decimal-pad" onChangeText={setHost} placeholder={copy.address} placeholderTextColor="#8290AB" style={[styles.input, styles.hostInput]} value={host} /><TextInput editable={!working} keyboardType="number-pad" maxLength={5} onChangeText={setPort} placeholder={copy.port} placeholderTextColor="#8290AB" style={[styles.input, styles.portInput]} value={port} /></View><TextInput autoCapitalize="characters" editable={!working} maxLength={6} onChangeText={setRoomCode} placeholder={copy.roomCode} placeholderTextColor="#8290AB" style={styles.input} value={roomCode} /><TouchableOpacity onPress={() => setShowScanner(true)} style={styles.scanButton}><MaterialIcons color="#4669DE" name="qr-code-scanner" size={19} /><Text style={styles.scanText}>{copy.scan}</Text></TouchableOpacity></View> : null}
       <View style={styles.actionRow}><TouchableOpacity disabled={working} onPress={startHost} style={[styles.primaryButton, working && styles.disabled]}><MaterialIcons color="#FFFFFF" name="wifi-tethering" size={18} /><Text style={styles.primaryText}>{copy.create}</Text></TouchableOpacity><TouchableOpacity disabled={working} onPress={() => showJoin ? void join() : setShowJoin(true)} style={[styles.secondaryButton, working && styles.disabled]}><MaterialIcons color="#4669DE" name={showJoin ? "login" : "add-link"} size={18} /><Text style={styles.secondaryText}>{copy.join}</Text></TouchableOpacity></View>
       <Text style={styles.hint}>{showJoin ? copy.joinHint : copy.hostHint}</Text>
       {showJoin ? <CloseSyncButton disabled={working} label={copy.leave} onPress={cancelJoin} /> : null}
       {displayStatus.error ? <Text style={styles.errorNotice}>{displayStatus.error}</Text> : null}
-      <TouchableOpacity onPress={() => void exportDiagnostics()} style={styles.scanButton}><MaterialIcons color="#4669DE" name="bug-report" size={17} /><Text style={styles.scanText}>{copy.diagnostics}</Text></TouchableOpacity>
     </>}
   </GlassSurface><SyncQrScanner language={language} onClose={() => setShowScanner(false)} onInvite={applyInvite} visible={showScanner} /><QrPreview copy={copy} invite={invite} onClose={() => setShowQr(false)} visible={showQr} /></>;
 }
 
-function ActiveRoom({ copy, invite, status, onOpenRecording, onLeave, onShowQr, onExportDiagnostics }: { copy: SyncPanelCopy; invite: string | null; status: LanSyncStatus; onOpenRecording: () => void; onLeave: () => void; onShowQr: () => void; onExportDiagnostics: () => void }) {
+function ActiveRoom({ copy, invite, status, onOpenRecording, onLeave, onShowQr }: { copy: SyncPanelCopy; invite: string | null; status: LanSyncStatus; onOpenRecording: () => void; onLeave: () => void; onShowQr: () => void }) {
   const isHost = status.mode === "host";
   const onlineClients = useMemo(() => status.devices.filter((device) => device.role === "client" && device.detail !== "offline" && device.state !== "error"), [status.devices]);
   const canOpenRecording = onlineClients.length > 0;
@@ -77,7 +88,6 @@ function ActiveRoom({ copy, invite, status, onOpenRecording, onLeave, onShowQr, 
     {isHost ? <><View style={styles.connectionCard}><Text style={styles.connectionLabel}>{copy.address}</Text><Text selectable style={styles.connectionValue}>{status.address}</Text><Text style={styles.connectionLabel}>{copy.roomCode}</Text><Text selectable style={styles.roomCode}>{status.roomCode}</Text></View>{invite ? <TouchableOpacity activeOpacity={0.8} onPress={onShowQr} style={styles.inviteCard}><View style={styles.qrFrame}><QRCode backgroundColor="#FFFFFF" color="#274B9B" size={70} value={invite} /></View><View style={styles.inviteCopy}><Text style={styles.inviteTitle}>{copy.qrTitle}</Text><Text style={styles.inviteHint}>{copy.qrHint}</Text></View><MaterialIcons color="#4669DE" name="open-in-full" size={19} /></TouchableOpacity> : null}<Text style={styles.hint}>{copy.hostHint}</Text></> : <Text style={styles.hint}>{copy.joinHint}</Text>}
     <View style={styles.deviceTitleRow}><Text style={styles.deviceTitle}>{copy.status}</Text><Text style={styles.deviceCount}>{status.devices.length}</Text></View>{status.devices.map((device) => <DeviceRow copy={copy} device={device} key={device.id} />)}
     {isHost ? <><TouchableOpacity disabled={!canOpenRecording} onPress={onOpenRecording} style={[styles.openButton, !canOpenRecording && styles.openButtonDisabled]}><MaterialIcons color="#FFFFFF" name="mic" size={19} /><Text style={styles.primaryText}>{copy.open}</Text></TouchableOpacity>{!canOpenRecording ? <Text style={styles.waitingClientHint}>{copy.waitForClient}</Text> : null}</> : null}
-    <TouchableOpacity onPress={onExportDiagnostics} style={styles.scanButton}><MaterialIcons color="#4669DE" name="bug-report" size={17} /><Text style={styles.scanText}>{copy.diagnostics}</Text></TouchableOpacity>
     <CloseSyncButton label={copy.leave} onPress={onLeave} />
   </>;
 }

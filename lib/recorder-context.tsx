@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 
 import { deleteProjectLocalFiles, exportRecordingToPublicWaveDirectory, persistRecording } from "@/lib/recorder-files";
+import { releaseLanSyncForProject, stopLanSync } from "@/lib/lan-sync";
+import { createProjectSyncKey } from "@/lib/lan-sync-protocol";
 import { canReplaceProjectScript } from "@/lib/project-rules";
 import { linkedProjectsForSpeaker } from "@/lib/speaker-rules";
 import { DEFAULT_RECORDER_SETTINGS, type RecorderSettings, type RecorderStore, type ScriptProject, type ScriptSentence, type Speaker } from "@/shared/recorder-types";
@@ -71,6 +73,8 @@ export function RecorderProvider({ children }: PropsWithChildren) {
   }, [commit]);
 
   const createProject = useCallback((input: NewProject) => {
+    // A new task changes the working context, so any existing LAN room must end first.
+    stopLanSync();
     const now = new Date().toISOString();
     const project: ScriptProject = { ...input, id: makeId("project"), createdAt: now, updatedAt: now };
     commit((current) => ({ ...current, projects: [project, ...current.projects] }));
@@ -79,11 +83,14 @@ export function RecorderProvider({ children }: PropsWithChildren) {
 
   const deleteProject = useCallback((projectId: string) => {
     const target = store.projects.find((project) => project.id === projectId);
+    if (target) releaseLanSyncForProject(createProjectSyncKey(target.sourceFileName, target.sentences), "project-deleted");
     commit((current) => ({ ...current, projects: current.projects.filter((project) => project.id !== projectId) }));
     if (target) void deleteProjectLocalFiles(target);
   }, [commit, store.projects]);
 
   const replaceProjectScript = useCallback((projectId: string, replacement: ScriptReplacement) => {
+    const existing = store.projects.find((project) => project.id === projectId);
+    if (existing) releaseLanSyncForProject(createProjectSyncKey(existing.sourceFileName, existing.sentences), "project-script-replaced");
     commit((current) => {
       const target = current.projects.find((project) => project.id === projectId);
       if (!target) throw new Error("录音任务不存在。");
@@ -93,7 +100,7 @@ export function RecorderProvider({ children }: PropsWithChildren) {
         projects: current.projects.map((project) => project.id === projectId ? { ...project, ...replacement, updatedAt: new Date().toISOString() } : project),
       };
     });
-  }, [commit]);
+  }, [commit, store.projects]);
 
   const updateSettings = useCallback((settings: RecorderSettings) => commit((current) => ({ ...current, settings })), [commit]);
 

@@ -8,6 +8,7 @@ import { GlassSurface } from "@/components/liquid-glass";
 import { ScreenContainer } from "@/components/screen-container";
 import { SyncRoomPanel } from "@/components/sync-room-panel";
 import { useAppLanguage } from "@/lib/i18n";
+import { releaseLanSyncForTaskSwitch } from "@/lib/lan-sync";
 import { createProjectSyncKey } from "@/lib/lan-sync-protocol";
 import { createRecordingArchive } from "@/lib/recorder-files";
 import { useRecorder } from "@/lib/recorder-context";
@@ -25,6 +26,9 @@ export default function ProjectScreen() {
   const copy = language === "zh" ? { missing: "未找到该录音任务。", home: "返回主页", notRecorded: "该句尚未录制", notRecordedHint: "完成录制后即可使用系统分享面板发送音频文件。", noSharing: "当前不可分享", noSharingHint: "请在 Android 设备上使用文件分享功能。", shareSentence: "分享单句录音", sharePackage: "分享完整录音包", packageFailed: "打包失败", packageUnavailable: "当前设备不可使用系统分享。", packageCreateFailed: "无法创建录音包。", deleteTitle: "删除任务？", deleteHint: (name: string, hasRecordings: boolean) => `“${name}”会从任务列表中移除。${hasRecordings ? "已录制的音频文件不会自动上传或恢复。" : ""}`, cancel: "取消", delete: "删除任务", replaceLocked: "无法更换文本", replaceLockedHint: "任务已经有录音进度。为避免录音和文本错配，当前任务不能更换脚本。", detail: "任务详情", speakerMissing: "发音人信息缺失", completed: "已完成", replace: "更换文本", lockHint: "已有录音进度，已锁定更换文本以保护录音与脚本对应关系。", review: "查看并重录", continue: "继续录制", start: "开始录制", sentenceList: "句子清单", listHint: "点击跳转 · 右侧分享", years: "岁" } : { missing: "Recording task not found.", home: "Back to tasks", notRecorded: "Sentence not recorded", notRecordedHint: "Finish recording this sentence before sharing the audio file.", noSharing: "Sharing unavailable", noSharingHint: "Use the file sharing feature on an Android device.", shareSentence: "Share sentence recording", sharePackage: "Share complete recording package", packageFailed: "Archive failed", packageUnavailable: "System sharing is unavailable on this device.", packageCreateFailed: "Unable to create the recording package.", deleteTitle: "Delete task?", deleteHint: (name: string, hasRecordings: boolean) => `“${name}” will be removed from the task list.${hasRecordings ? " Recorded audio files will not be uploaded or restored." : ""}`, cancel: "Cancel", delete: "Delete task", replaceLocked: "Cannot replace script", replaceLockedHint: "This task already has recording progress. The script is locked to keep audio aligned with its text.", detail: "Task details", speakerMissing: "Speaker information missing", completed: "Completed", replace: "Replace script", lockHint: "Recording progress locks script replacement to protect the text-to-audio relationship.", review: "Review and re-record", continue: "Continue recording", start: "Start recording", sentenceList: "Sentences", listHint: "Tap to jump · Share on the right", years: "years" };
   const genderLabel = (gender: string) => language === "zh" ? gender : gender === "女" ? "Female" : gender === "男" ? "Male" : "Other";
   const projectSyncKey = project ? createProjectSyncKey(project.sourceFileName, project.sentences) : "";
+  useEffect(() => {
+    if (projectSyncKey) releaseLanSyncForTaskSwitch(projectSyncKey, "project-detail-opened");
+  }, [projectSyncKey]);
   const clientWaitingForHost = Boolean(project) && syncStatus.mode === "client" && Boolean(syncStatus.projectId);
   useEffect(() => {
     if (!clientWaitingForHost || autoOpenedClientRoomRef.current === projectSyncKey || !project) return;

@@ -258,6 +258,24 @@ export function stopLanSync() {
   emit();
 }
 
+/** Releases a room only when it belongs to the task being removed or replaced. */
+export function releaseLanSyncForProject(projectKey: string, reason: string) {
+  const normalized = normalizeSyncProjectKey(projectKey);
+  if (!normalized || session.mode === "idle" || normalizeSyncProjectKey(session.projectId ?? "") !== normalized) return false;
+  logDiagnostic("sync-project-released", `reason=${reason}; ${keyFingerprint(normalized)}`);
+  stopLanSync();
+  return true;
+}
+
+/** Releases any active room that belongs to a different task before the user enters that task. */
+export function releaseLanSyncForTaskSwitch(projectKey: string, reason: string) {
+  const normalized = normalizeSyncProjectKey(projectKey);
+  if (!normalized || session.mode === "idle" || normalizeSyncProjectKey(session.projectId ?? "") === normalized) return false;
+  logDiagnostic("sync-task-switch-released", `reason=${reason}; from=${keyFingerprint(session.projectId)}; to=${keyFingerprint(normalized)}`);
+  stopLanSync();
+  return true;
+}
+
 export function reportLanSyncState(update: LanSyncStateUpdate) {
   if (session.mode === "idle" || !session.self.id) return;
   const self = { ...session.self, ...update, updatedAt: now() };
