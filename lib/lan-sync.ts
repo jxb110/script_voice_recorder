@@ -124,10 +124,6 @@ export async function startLanSyncHost(input: LanSyncHostInput): Promise<LanSync
   if (Platform.OS === "web") throw new Error("请在 Android 主控手机中创建同步房间。");
   const hostProjectKey = normalizeSyncProjectKey(input.projectId);
   if (!hostProjectKey) throw new Error("主控同步任务键无效。请返回任务详情后重试。");
-  if (session.mode === "host" && session.projectId === hostProjectKey && server?.listening !== false) {
-    logDiagnostic("host-room-reused", `address=${session.address}; room=${maskedRoomCode(session.roomCode)}`);
-    return session;
-  }
   await forceResetLanSync("host-recreate");
   const ip = await Network.getIpAddressAsync();
   if (!ip || ip === "0.0.0.0") throw new Error("未能读取局域网地址。请连接同一 Wi-Fi 或开启热点后重试。");
