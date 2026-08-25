@@ -1,5 +1,6 @@
 export const LAN_SYNC_PORT = 35679;
 export const LAN_SYNC_EXECUTION_LEAD_MS = 850;
+export const LAN_SYNC_NATIVE_PROTOCOL = "SCRIPT-RECORDER-SYNC/1";
 const SYNC_INVITE_TYPE = "script-recorder-sync";
 
 export function createLanSyncAddress(hostInput: string, portInput: string | number = LAN_SYNC_PORT) {

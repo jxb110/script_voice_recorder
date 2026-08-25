@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LAN_SYNC_EXECUTION_LEAD_MS, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_EXECUTION_LEAD_MS, LAN_SYNC_NATIVE_PROTOCOL, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
 
 describe("LAN sync protocol", () => {
   it("normalizes Android decimal byte-list socket payloads before parsing handshake responses", () => {
@@ -10,6 +10,10 @@ describe("LAN sync protocol", () => {
     expect(new TextDecoder().decode(normalizeLanSocketChunk({ data: "72,84,84,80" }))).toBe("HTTP");
     expect(new TextDecoder().decode(normalizeLanSocketChunk("[72, 84, 84, 80]"))).toBe("HTTP");
     expect(new TextDecoder().decode(normalizeLanSocketChunk({ 0: 72, 1: 84, 2: 84, 3: 80 }))).toBe("HTTP");
+  });
+
+  it("uses one explicit native TCP protocol marker for both room peers", () => {
+    expect(LAN_SYNC_NATIVE_PROTOCOL).toBe("SCRIPT-RECORDER-SYNC/1");
   });
 
   it("creates a short local room code", () => {
