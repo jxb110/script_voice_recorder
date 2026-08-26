@@ -10,7 +10,7 @@ export function SettingsFooter({ versionLabel, version }: { versionLabel: string
 }
 
 const styles = StyleSheet.create({
-  footer: { alignItems: "center", marginTop: 28, paddingBottom: 8 },
+  footer: { alignItems: "center", marginTop: 10, paddingBottom: 8 },
   version: { color: "#7181A2", fontSize: 12, fontVariant: ["tabular-nums"] },
   poweredBy: { color: "#526A9F", fontSize: 12, fontWeight: "700", marginTop: 6 },
 });
