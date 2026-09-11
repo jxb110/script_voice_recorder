@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>采音脚本桌面端</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar glass">
+        <div>
+          <p class="eyebrow">SCRIPT VOICE RECORDER · 4.0.0</p>
+          <h1>采音脚本桌面端</h1>
+          <p id="syncSummary" class="muted">未连接同步房间</p>
+        </div>
+        <div class="header-actions">
+          <button id="importScriptButton" class="secondary">导入 TXT 脚本</button>
+          <button id="saveSettingsButton" class="primary">保存配置</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="sidebar glass">
+          <h2>任务与发音人</h2>
+          <label>任务名称<input id="projectName" value="未命名任务" maxlength="48" /></label>
+          <label>发音人姓名<input id="speakerName" value="未命名" maxlength="48" /></label>
+          <div class="two-columns">
+            <label>性别<select id="speakerGender"><option>女</option><option>男</option><option selected>其他</option></select></label>
+            <label>年龄<input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
+          </div>
+          <p id="scriptSummary" class="script-summary">尚未导入脚本</p>
+          <div id="sentenceList" class="sentence-list" aria-label="句子列表"></div>
+        </aside>
+
+        <section class="main-panel">
+          <section class="record-card glass">
+            <div class="progress-line"><span id="progressText">尚未导入脚本</span><span id="recordState">待命</span></div>
+            <div id="deviceDots" class="device-dots" aria-label="同步设备状态"></div>
+            <div class="prompt-card"><span>提示词</span><strong id="promptText">导入脚本后显示提示词</strong></div>
+            <div class="reading-card"><span>朗读文本</span><div id="readingText">请先导入 TXT 脚本</div></div>
+            <div class="wave-shell"><canvas id="waveCanvas" width="760" height="112"></canvas></div>
+            <div class="record-actions">
+              <button id="previousButton" class="secondary">上一句</button>
+              <button id="recordButton" class="record">开始录制</button>
+              <button id="nextButton" class="secondary">下一句</button>
+              <button id="playButton" class="secondary">播放</button>
+              <button id="rerecordButton" class="secondary">重录</button>
+              <button id="cancelButton" class="secondary">取消准备</button>
+              <button id="completeButton" class="secondary">完成任务</button>
+            </div>
+            <p id="recordMessage" class="muted" role="status">电脑端录音会保存为 WAV。</p>
+          </section>
+
+          <section class="sync-card glass">
+            <div class="section-heading"><div><h2>多设备同步录音</h2><p>电脑可创建主控房间，或加入手机/电脑主控房间。</p></div><button id="closeSyncButton" class="danger">关闭同步</button></div>
+            <div class="sync-grid">
+              <label>设备名称<input id="deviceName" /></label>
+              <label>主控 IP<input id="hostIp" placeholder="例如 192.168.1.10" /></label>
+              <label>端口<input id="hostPort" type="number" value="35679" min="1" max="65535" /></label>
+              <label>房间口令<input id="roomCode" maxlength="12" /></label>
+            </div>
+            <div class="sync-actions"><button id="hostButton" class="primary">创建主控房间</button><button id="joinButton" class="secondary">加入已有房间</button><button id="openSyncButton" class="primary">进入同步录制</button></div>
+            <div id="hostInfo" class="host-info">创建房间后显示本机 IP、端口与口令。</div>
+            <div id="deviceList" class="device-list"></div>
+          </section>
+
+          <section class="settings-card glass">
+            <div class="section-heading"><div><h2>电脑录音配置</h2><p>与手机端保持一致的 WAV 参数和目录结构。</p></div></div>
+            <div class="settings-grid">
+              <label>采样率<select id="sampleRate"><option value="16000">16 kHz</option><option value="22050">22.05 kHz</option><option value="24000">24 kHz</option><option value="44100">44.1 kHz</option><option value="48000" selected>48 kHz</option></select></label>
+              <label>声道<select id="channels"><option value="1">单声道</option><option value="2">双声道</option></select></label>
+              <label>位深<select id="bitDepth"><option value="16">16-bit</option><option value="32">32-bit</option></select></label>
+              <label>首端静音（毫秒）<input id="leadingSilenceMs" type="number" min="0" max="10000" /></label>
+              <label>尾端静音（毫秒）<input id="trailingSilenceMs" type="number" min="0" max="10000" /></label>
+              <label>麦克风<select id="microphone"><option value="">正在读取麦克风…</option></select></label>
+              <label class="path-field">数据保存路径<div class="path-picker"><input id="recordingRoot" readonly /><button id="choosePathButton" class="secondary">选择</button></div></label>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

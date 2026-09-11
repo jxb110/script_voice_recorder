@@ -11,7 +11,7 @@ vi.mock("expo-media-library", () => ({
 }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 
-import { formatRecordingTimestamp, getPublicAudioAlbumName, parseScriptContent } from "@/lib/recorder-files";
+import { formatRecordingTimestamp, getPublicAudioAlbumName, getRecordingFileName, getRecordingFileNameFromUri, parseScriptContent } from "@/lib/recorder-files";
 import { createProjectSyncKey } from "@/lib/lan-sync-protocol";
 
 const makeLine = (label: string, prompt: string) => JSON.stringify([
@@ -54,5 +54,13 @@ describe("逐行 JSON TXT 脚本", () => {
 
   it("将公共录音时间格式化为可读的年月日和时分秒", () => {
     expect(formatRecordingTimestamp(new Date(2026, 7, 25, 16, 36, 41).getTime())).toBe("20260825-163641");
+  });
+
+  it("统一私有保存、公共目录和分享使用任务名、发音人、句号与时间戳文件名", () => {
+    const project = { name: "任务 A", sourceFileName: "legacy.txt", sentences: [] } as never;
+    const speaker = { name: "张 三", gender: "女", age: 25 } as never;
+    const timestamp = new Date(2026, 7, 25, 16, 36, 41).getTime();
+    expect(getRecordingFileName(project, speaker, 4, timestamp)).toBe("任务_A_张_三_004_20260825-163641.wav");
+    expect(getRecordingFileNameFromUri("file:///documents/recordings/任务_A_张_三_004_20260825-163641.wav")).toBe("任务_A_张_三_004_20260825-163641.wav");
   });
 });

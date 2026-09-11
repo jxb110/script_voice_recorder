@@ -1,0 +1,41 @@
+{
+  "name": "script-voice-recorder-desktop",
+  "version": "4.0.0",
+  "private": true,
+  "description": "采音脚本 Windows 局域网同步录音桌面端",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "test": "node --test --test-force-exit core/*.test.cjs",
+    "package:win": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.jixiongbujiang.scriptrecorder.desktop",
+    "productName": "采音脚本桌面端",
+    "icon": "../assets/images/icon.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "core/**",
+      "renderer/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

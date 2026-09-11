@@ -60,6 +60,7 @@ Thumbs.db
 *.tgz
 *.tar.gz
 .cache/
+desktop/release/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/

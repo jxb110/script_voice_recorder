@@ -114,7 +114,7 @@ export function RecorderProvider({ children }: PropsWithChildren) {
     const persistedUri = await persistRecording(sourceUri, project, sentence, speaker);
     let publicUri: string | undefined;
     let publicExportError: string | undefined;
-    try { publicUri = await exportRecordingToPublicWaveDirectory(persistedUri, project, speaker); }
+    try { publicUri = await exportRecordingToPublicWaveDirectory(persistedUri, project, speaker, sentence.publicUri); }
     catch (error) { publicExportError = error instanceof Error ? error.message : "录音未能导出到手机公共目录。"; }
     commit((current) => ({
       ...current,

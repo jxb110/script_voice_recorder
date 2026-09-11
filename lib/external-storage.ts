@@ -219,11 +219,25 @@ export async function deleteNativeFile(path: string) {
   if (await nativeFs.exists(path)) await nativeFs.unlink(path);
 }
 
+/** Deletes a previously exported recording only when it remains inside the app-owned shared WAV tree. */
+export async function deleteSharedRecordingUri(uri?: string) {
+  if (!uri) return false;
+  const target = nativePath(uri);
+  const recordingsRoot = sharedPath(RECORDINGS_RELATIVE_DIR, true).replace(/\/$/, "");
+  if (!target.startsWith(`${recordingsRoot}/`)) return false;
+  const nativeFs = getNativeFileSystem();
+  if (!(await nativeFs.exists(target))) return false;
+  await nativeFs.unlink(target);
+  return true;
+}
+
 export async function copyPrivateFileToSharedStorage(sourceUri: string, relativePath: string) {
   const relative = normalizeRelativePath(relativePath);
   const parent = relative.includes("/") ? relative.slice(0, relative.lastIndexOf("/")) : "";
   const nativeFs = getNativeFileSystem();
+  const target = sharedPath(relative);
   await nativeFs.mkdir(sharedPath(parent, true));
-  await nativeFs.copyFile(nativePath(sourceUri), sharedPath(relative));
+  if (await nativeFs.exists(target)) await nativeFs.unlink(target);
+  await nativeFs.copyFile(nativePath(sourceUri), target);
   return sharedUri(relative);
 }

@@ -2,7 +2,7 @@ import { strToU8, zipSync } from "fflate";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 
-import { copyPrivateFileToSharedStorage, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess } from "@/lib/external-storage";
+import { copyPrivateFileToSharedStorage, deleteSharedRecordingUri, RECORDINGS_RELATIVE_DIR, requestAllFilesAccess } from "@/lib/external-storage";
 import type { ScriptProject, ScriptSentence, ScriptToken, Speaker } from "@/shared/recorder-types";
 
 const ROOT_DIRECTORY = FileSystem.documentDirectory ?? "";
@@ -89,6 +89,19 @@ export async function readImportedScript(uri: string) {
 
 const getSpeakerFolderName = (speaker: Speaker) => `${cleanFileSegment(speaker.name)}_${speaker.gender}_${speaker.age}岁`;
 
+/** Shared by app storage, Android public exports and archive sharing. */
+export function getRecordingFileName(project: ScriptProject, speaker: Speaker, sentenceIndex: number, timestamp = Date.now()) {
+  const paragraph = String(sentenceIndex).padStart(3, "0");
+  return `${cleanFileSegment(project.name)}_${cleanFileSegment(speaker.name)}_${paragraph}_${formatRecordingTimestamp(timestamp)}.wav`;
+}
+
+export function getRecordingFileNameFromUri(uri?: string) {
+  if (!uri) return undefined;
+  const withoutQuery = uri.split(/[?#]/, 1)[0] ?? "";
+  const encodedName = withoutQuery.slice(withoutQuery.lastIndexOf("/") + 1);
+  return encodedName ? decodeURIComponent(encodedName) : undefined;
+}
+
 export function getPublicAudioAlbumName(project: ScriptProject, speaker: Speaker) {
   return `record_jxb/wave/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}`;
 }
@@ -97,18 +110,22 @@ export async function persistRecording(sourceUri: string, project: ScriptProject
   if (Platform.OS === "web") return sourceUri;
   const folder = `${RECORDINGS_DIRECTORY}${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}/`;
   await ensureDirectory(folder);
-  const paragraph = String(sentence.index).padStart(3, "0");
-  const baseName = cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""));
-  const destination = `${folder}${baseName}_${cleanFileSegment(speaker.name)}_${paragraph}.wav`;
+  const destination = `${folder}${getRecordingFileName(project, speaker, sentence.index)}`;
   if ((await FileSystem.getInfoAsync(destination)).exists) await FileSystem.deleteAsync(destination, { idempotent: true });
   await FileSystem.copyAsync({ from: sourceUri, to: destination });
+  const previousRecordingUri = sentence.recordingUri;
+  if (previousRecordingUri && previousRecordingUri !== destination && previousRecordingUri.startsWith(RECORDINGS_DIRECTORY)) {
+    const previousInfo = await FileSystem.getInfoAsync(previousRecordingUri);
+    if (previousInfo.exists) await FileSystem.deleteAsync(previousRecordingUri, { idempotent: true });
+  }
   return destination;
 }
 
-export async function exportRecordingToPublicWaveDirectory(privateUri: string, project: ScriptProject, speaker: Speaker) {
+export async function exportRecordingToPublicWaveDirectory(privateUri: string, project: ScriptProject, speaker: Speaker, previousPublicUri?: string) {
   if (Platform.OS !== "android") return undefined;
   await requestAllFilesAccess();
-  const exportName = `${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${formatRecordingTimestamp()}.wav`;
+  await deleteSharedRecordingUri(previousPublicUri);
+  const exportName = getRecordingFileNameFromUri(privateUri) ?? getRecordingFileName(project, speaker, 0);
   const relativePath = `${RECORDINGS_RELATIVE_DIR}/${getSpeakerFolderName(speaker)}/${cleanFileSegment(project.name)}/${exportName}`;
   return copyPrivateFileToSharedStorage(privateUri, relativePath);
 }
@@ -135,7 +152,8 @@ export async function createRecordingArchive(project: ScriptProject, speaker: Sp
   for (const sentence of project.sentences) {
     if (!sentence.recordingUri || !(await FileSystem.getInfoAsync(sentence.recordingUri)).exists) continue;
     const audioBase64 = await FileSystem.readAsStringAsync(sentence.recordingUri, { encoding: FileSystem.EncodingType.Base64 });
-    entries[`${folderName}/${cleanFileSegment(project.sourceFileName.replace(/\.[^.]+$/, ""))}_${cleanFileSegment(speaker.name)}_${String(sentence.index).padStart(3, "0")}.wav`] = base64ToBytes(audioBase64);
+    const archiveName = getRecordingFileNameFromUri(sentence.recordingUri) ?? getRecordingFileName(project, speaker, sentence.index, Date.parse(sentence.recordedAt ?? "") || Date.now());
+    entries[`${folderName}/${archiveName}`] = base64ToBytes(audioBase64);
   }
   const archive = zipSync(entries, { level: 6 });
   const exportDirectory = `${ROOT_DIRECTORY}exports/`;
