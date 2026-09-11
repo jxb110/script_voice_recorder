@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   chooseDirectory: () => ipcRenderer.invoke("dialog:choose-directory"),
   openScript: () => ipcRenderer.invoke("dialog:open-script"),
   saveRecording: (payload) => ipcRenderer.invoke("recording:save", payload),
+  getRecording: (payload) => ipcRenderer.invoke("recording:get", payload),
   getDeviceName: () => ipcRenderer.invoke("system:device-name"),
   sync: {
     host: (input) => ipcRenderer.invoke("sync:host", input),

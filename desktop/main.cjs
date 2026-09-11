@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const { getRecordingTarget } = require("./core/recording-paths.cjs");
 const { SyncRoom } = require("./core/sync-room.cjs");
@@ -95,6 +96,12 @@ ipcMain.handle("dialog:open-script", async () => {
   return { name: path.basename(filePath), content: await fs.readFile(filePath, "utf8") };
 });
 ipcMain.handle("recording:save", async (_event, payload) => saveRecording(payload));
+ipcMain.handle("recording:get", (_event, payload) => {
+  const { project, speaker, sentenceIndex } = payload ?? {};
+  if (!project?.name || !speaker?.name || !Number.isInteger(sentenceIndex) || sentenceIndex < 1) return undefined;
+  const recordingPath = desktopState.outputs[outputKey(project, speaker, sentenceIndex)];
+  return recordingPath ? { path: recordingPath, url: pathToFileURL(recordingPath).href } : undefined;
+});
 ipcMain.handle("sync:host", async (_event, input) => syncRoom.host(input));
 ipcMain.handle("sync:join", async (_event, input) => syncRoom.join(input));
 ipcMain.handle("sync:stop", async () => { await syncRoom.stop(); return syncRoom.snapshot(); });
