@@ -52,3 +52,18 @@ test("桌面端明确拒绝句数不一致的客户端而不比较脚本内容",
     await host.stop();
   }
 });
+
+test("桌面端连续创建主控房间会串行释放旧监听端口", async () => {
+  const room = new SyncRoom(() => {});
+  try {
+    const [first, second] = await Promise.all([
+      room.host({ projectId: "desktop|2|first", sentenceCount: 2, deviceName: "Windows 主控" }),
+      room.host({ projectId: "desktop|2|second", sentenceCount: 2, deviceName: "Windows 主控" }),
+    ]);
+    assert.equal(first.mode, "host");
+    assert.equal(second.mode, "host");
+    assert.equal(room.snapshot().mode, "host");
+  } finally {
+    await room.stop();
+  }
+});

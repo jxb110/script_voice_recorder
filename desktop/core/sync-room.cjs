@@ -22,7 +22,14 @@ class SyncRoom {
     this.heartbeat = null;
     this.peers = new Set();
     this.openSockets = new Set();
+    this.lifecycle = Promise.resolve();
     this.session = this.makeIdle();
+  }
+
+  serializeLifecycle(operation) {
+    const next = this.lifecycle.catch(() => undefined).then(operation);
+    this.lifecycle = next.catch(() => undefined);
+    return next;
   }
 
   makeIdle() {
@@ -45,9 +52,13 @@ class SyncRoom {
     throw new Error("未能读取电脑的局域网 IPv4 地址。请连接 Wi-Fi 或网线后重试。");
   }
 
-  async host({ projectId, sentenceCount, deviceName }) {
+  async host(input) {
+    return this.serializeLifecycle(() => this.hostInternal(input));
+  }
+
+  async hostInternal({ projectId, sentenceCount, deviceName }) {
     if (!isValidCount(sentenceCount)) throw new Error("主控录音任务没有可同步的句子。");
-    await this.stop();
+    await this.stopInternal();
     const ip = this.getLanIp();
     const self = createDevice({ id: crypto.randomUUID(), name: deviceName, role: "host", sentenceCount });
     this.session = { mode: "host", roomCode: createRoomCode(), address: `${ip}:${LAN_SYNC_PORT}`, projectId, sentenceCount, self, devices: [self] };
@@ -65,11 +76,15 @@ class SyncRoom {
     return this.snapshot();
   }
 
-  async join({ host, port, roomCode, projectId, sentenceCount, deviceName }) {
+  async join(input) {
+    return this.serializeLifecycle(() => this.joinInternal(input));
+  }
+
+  async joinInternal({ host, port, roomCode, projectId, sentenceCount, deviceName }) {
     if (!host || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535) throw new Error("主控 IP 或端口无效。");
     if (!normalizeRoomCode(roomCode)) throw new Error("请输入房间口令。");
     if (!isValidCount(sentenceCount)) throw new Error("当前脚本没有可同步的句子。");
-    await this.stop();
+    await this.stopInternal();
     const self = createDevice({ id: crypto.randomUUID(), name: deviceName, role: "client", sentenceCount });
     this.session = { mode: "idle", roomCode: normalizeRoomCode(roomCode), address: `${host}:${Number(port)}`, projectId, sentenceCount, self, devices: [] };
     this.emit();
@@ -116,6 +131,10 @@ class SyncRoom {
   }
 
   async stop() {
+    return this.serializeLifecycle(() => this.stopInternal());
+  }
+
+  async stopInternal() {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = null;
     if (this.client) this.client.destroy();
@@ -130,7 +149,7 @@ class SyncRoom {
     this.server = null;
     this.session = this.makeIdle();
     this.emit();
-    if (server) await new Promise((resolve) => {
+    if (server && server.listening) await new Promise((resolve) => {
       server.unref();
       const fallback = setTimeout(resolve, 700);
       fallback.unref?.();
