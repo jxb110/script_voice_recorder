@@ -51,19 +51,32 @@ export function resampleWaveform(samples: number[], count: number): number[] {
   });
 }
 
-/** Builds the top, bottom and filled SVG paths for the desktop-matched symmetric waveform. */
-export function createSymmetricWaveformPaths(samples: number[], width: number, height: number, maximumPoints = Math.floor(width)) {
+export type SymmetricWaveformOptions = {
+  maximumHeightRatio?: number;
+  maximumPoints?: number;
+  progressive?: boolean;
+  sampleWidth?: number;
+};
+
+/** Builds the top, bottom and filled SVG paths for the mobile high-slim symmetric waveform. */
+export function createSymmetricWaveformPaths(samples: number[], width: number, height: number, options: SymmetricWaveformOptions = {}) {
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
   const center = safeHeight / 2;
-  if (!samples.length) return { upperPath: "", lowerPath: "", fillPath: "", pointCount: 0 };
-  const values = resampleWaveform(samples, Math.max(1, Math.min(Math.max(1, maximumPoints), samples.length || 1)));
-  const maxHeight = safeHeight * 0.44;
+  const maximumPoints = Math.max(1, Math.floor(options.maximumPoints ?? safeWidth));
+  const progressive = options.progressive ?? false;
+  const sampleWidth = Math.max(0.8, options.sampleWidth ?? 2.1);
+  const maximumHeightRatio = Math.min(0.5, Math.max(0.05, options.maximumHeightRatio ?? 0.48));
+  if (!samples.length) return { drawWidth: 0, fillPath: "", lowerPath: "", maxHeight: safeHeight * maximumHeightRatio, pointCount: 0, upperPath: "" };
+  const pointCount = Math.max(1, Math.min(maximumPoints, samples.length));
+  const values = resampleWaveform(samples, pointCount);
+  const drawWidth = progressive ? Math.min(safeWidth, pointCount * sampleWidth) : safeWidth;
+  const maxHeight = safeHeight * maximumHeightRatio;
   const points = values.map((sample, index) => ({
     amplitude: Math.max(0.015, Math.min(1, sample)),
-    x: index * (safeWidth / values.length),
+    x: index * (drawWidth / values.length),
   }));
-  const upperPath = `M 0 ${center} ${points.map((point) => `L ${point.x} ${center - point.amplitude * maxHeight}`).join(" ")} L ${safeWidth} ${center}`;
-  const lowerPath = `M ${safeWidth} ${center} ${points.slice().reverse().map((point) => `L ${point.x} ${center + point.amplitude * maxHeight}`).join(" ")} L 0 ${center}`;
-  return { upperPath, lowerPath, fillPath: `${upperPath} Z ${lowerPath} Z`, pointCount: points.length };
+  const upperPath = `M 0 ${center} ${points.map((point) => `L ${point.x} ${center - point.amplitude * maxHeight}`).join(" ")} L ${drawWidth} ${center}`;
+  const lowerPath = `M ${drawWidth} ${center} ${points.slice().reverse().map((point) => `L ${point.x} ${center + point.amplitude * maxHeight}`).join(" ")} L 0 ${center}`;
+  return { drawWidth, upperPath, lowerPath, fillPath: `${upperPath} Z ${lowerPath} Z`, pointCount: points.length, maxHeight };
 }

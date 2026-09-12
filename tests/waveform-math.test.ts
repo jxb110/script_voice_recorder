@@ -58,4 +58,12 @@ describe("录音波形数据转换", () => {
     expect(paths.lowerPath).toMatch(/^M 360 38 L 240 /);
     expect(paths.fillPath.match(/ Z /g)).toHaveLength(1);
   });
+
+  it("录制中的高瘦波形从左向右展开，并在达到宽度上限后保留完整峰值", () => {
+    const paths = createSymmetricWaveformPaths([0.1, 0.9, 0.2], 360, 76, { progressive: true, sampleWidth: 2.1, maximumHeightRatio: 0.48 });
+    expect(paths.drawWidth).toBeCloseTo(6.3);
+    expect(paths.maxHeight).toBeCloseTo(36.48);
+    expect(paths.upperPath).toMatch(/^M 0 38 L 0 /);
+    expect(paths.lowerPath).toMatch(/^M 6\.3/);
+  });
 });

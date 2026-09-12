@@ -12,11 +12,19 @@ type AudioWaveformProps = {
 };
 
 const WAVE_VIEW_WIDTH = 360;
+const LIVE_WAVE_SAMPLE_WIDTH = 2.1;
+const PLAYBACK_WAVE_POINT_COUNT = 104;
+const HIGH_SLIM_HEIGHT_RATIO = 0.48;
 
 export function AudioWaveform({ samples, progress: _progress = 0, recording = false, height = 76 }: AudioWaveformProps) {
   const width = WAVE_VIEW_WIDTH;
   const center = height / 2;
-  const waveform = useMemo(() => createSymmetricWaveformPaths(samples, width, height), [height, samples, width]);
+  const waveform = useMemo(() => createSymmetricWaveformPaths(samples, width, height, {
+    maximumHeightRatio: HIGH_SLIM_HEIGHT_RATIO,
+    maximumPoints: recording ? Math.floor(width / LIVE_WAVE_SAMPLE_WIDTH) : PLAYBACK_WAVE_POINT_COUNT,
+    progressive: recording,
+    sampleWidth: LIVE_WAVE_SAMPLE_WIDTH,
+  }), [height, recording, samples, width]);
   const clipId = recording ? "recording-wave-clip" : "playback-wave-clip";
 
   return (
@@ -25,10 +33,10 @@ export function AudioWaveform({ samples, progress: _progress = 0, recording = fa
         <Rect x="0" y="0" width={width} height={height} fill="#FFFFFF" />
         <Defs><ClipPath id={clipId}><Rect x="2" y="2" width={width - 4} height={height - 4} /></ClipPath></Defs>
         <G clipPath={`url(#${clipId})`}>
-          <Line x1="0" y1={center} x2={width} y2={center} stroke="rgba(91,110,137,0.22)" strokeWidth="0.35" />
+          <Line x1="0" y1={center} x2={width} y2={center} stroke="rgba(91,110,137,0.18)" strokeWidth="0.10" />
           <Path d={waveform.fillPath} fill="#42D66B" />
           <Path d={waveform.upperPath} fill="#FFFFFF" opacity={0.15} />
-          {recording ? <Rect x={width - 2} y="0" width="0.8" height={height} fill="rgba(82,112,92,0.45)" /> : null}
+          {recording ? <Rect x={Math.max(1, waveform.drawWidth - 0.8)} y="0" width="0.8" height={height} fill="rgba(82,112,92,0.45)" /> : null}
         </G>
       </Svg>
     </View>
