@@ -17,7 +17,9 @@
       </header>
 
       <section class="workspace">
-        <aside class="sidebar fold-card glass" data-fold="task">
+        <section class="task-workspace">
+          <button id="newTaskButton" class="button primary new-task-button" type="button">+ 新建任务</button>
+        <aside id="currentTaskCard" class="sidebar fold-card glass" data-fold="task">
           <button class="fold-trigger task-fold-trigger" type="button" aria-expanded="true"><span><b>任务与发音人</b><small id="scriptSummary">尚未导入脚本</small></span><span class="fold-chevron">⌄</span></button>
           <div class="fold-content task-fold-content">
             <label>任务名称<input id="projectName" value="未命名任务" maxlength="48" /></label>
@@ -26,10 +28,12 @@
               <label>性别<select id="speakerGender"><option>女</option><option>男</option><option selected>其他</option></select></label>
               <label>年龄<input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
             </div>
-            <div class="task-actions"><button id="importScriptButton" class="button primary">导入 TXT 脚本</button><button id="newTaskButton" class="button secondary">新建任务</button><button id="deleteTaskButton" class="button danger">删除当前任务</button></div>
+            <div class="task-actions"><button id="importScriptButton" class="button primary">导入 TXT 脚本</button><button id="deleteTaskButton" class="button danger">删除当前任务</button></div>
             <div id="sentenceList" class="sentence-list" aria-label="句子列表"></div>
           </div>
         </aside>
+          <div id="taskArchive" class="task-archive" aria-label="已创建任务"></div>
+        </section>
 
         <section class="main-panel">
           <section class="record-card glass">

@@ -11,6 +11,7 @@ import {
   createRoomCode,
   createSyncCommand,
   getSyncProjectSentenceCount,
+  resolveClientSyncProjectKey,
   normalizeSyncProjectKey,
   normalizeSyncRoomCode,
   normalizeLanSocketChunk,
@@ -371,7 +372,9 @@ function handleHostConnection(socket: TcpSocket) {
 function handleClientMessage(message: SyncMessage, finish: (error?: Error) => void) {
   if (message.type === "welcome") {
     logDiagnostic("client-welcome-received", `room=${maskedRoomCode(message.roomCode)}; ${keyFingerprint(message.projectId)}; devices=${message.devices.length}`);
-    session = { ...session, mode: "client", roomCode: message.roomCode, devices: message.devices, error: undefined };
+    // The host owns the command project identifier. This keeps Android clients compatible
+    // with a Windows host whose local task ID legitimately differs from the Android task ID.
+    session = { ...session, mode: "client", roomCode: message.roomCode, projectId: resolveClientSyncProjectKey(session.projectId ?? "", message.projectId), devices: message.devices, error: undefined };
     emit();
     if (!heartbeat) heartbeat = setInterval(() => sendClient({ type: "ping", sentAt: now() }), HEARTBEAT_MS);
     finish();

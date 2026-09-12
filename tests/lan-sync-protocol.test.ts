@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LAN_SYNC_EXECUTION_LEAD_MS, LAN_SYNC_NATIVE_PROTOCOL, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, getSyncProjectSentenceCount, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite } from "@/lib/lan-sync-protocol";
+import { LAN_SYNC_EXECUTION_LEAD_MS, LAN_SYNC_NATIVE_PROTOCOL, createLanSyncAddress, createProjectSyncKey, createRoomCode, createSyncCommand, createSyncRoomInvite, getSyncProjectSentenceCount, normalizeLanSocketChunk, parseSyncMessage, parseSyncRoomInvite, resolveClientSyncProjectKey } from "@/lib/lan-sync-protocol";
 
 describe("LAN sync protocol", () => {
   it("normalizes Android decimal byte-list socket payloads before parsing handshake responses", () => {
@@ -43,6 +43,11 @@ describe("LAN sync protocol", () => {
     expect(getSyncProjectSentenceCount("v3|host-script.txt|120|aabbccdd")).toBe(120);
     expect(getSyncProjectSentenceCount("v3|other-script.txt|120|11223344")).toBe(120);
     expect(getSyncProjectSentenceCount("invalid-key")).toBeUndefined();
+  });
+
+  it("adopts the host project key so Windows host commands route to an Android client", () => {
+    expect(resolveClientSyncProjectKey("v3|android.txt|3|11111111", "desktop|3|42")).toBe("desktop|3|42");
+    expect(resolveClientSyncProjectKey("v3|android.txt|3|11111111", "")).toBe("v3|android.txt|3|11111111");
   });
 
   it("accepts complete commands and rejects malformed network payloads", () => {

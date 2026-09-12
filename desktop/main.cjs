@@ -110,10 +110,15 @@ ipcMain.handle("dialog:open-script", async () => {
 });
 ipcMain.handle("recording:save", async (_event, payload) => saveRecording(payload));
 ipcMain.handle("recording:delete-task", async (_event, payload) => deleteTaskRecordings(payload));
-ipcMain.handle("recording:get", (_event, payload) => {
+ipcMain.handle("recording:get", async (_event, payload) => {
   const { project, speaker, sentenceIndex } = payload ?? {};
   if (!project?.name || !speaker?.name || !Number.isInteger(sentenceIndex) || sentenceIndex < 1) return undefined;
-  const recordingPath = desktopState.outputs[outputKey(project, speaker, sentenceIndex)];
+  const key = outputKey(project, speaker, sentenceIndex);
+  const recordingPath = desktopState.outputs[key];
+  if (recordingPath) {
+    try { await fs.access(recordingPath); }
+    catch { delete desktopState.outputs[key]; await saveState(); return undefined; }
+  }
   return recordingPath ? { path: recordingPath, url: pathToFileURL(recordingPath).href } : undefined;
 });
 ipcMain.handle("sync:host", async (_event, input) => syncRoom.host(input));

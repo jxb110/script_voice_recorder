@@ -53,6 +53,11 @@ export function normalizeSyncProjectKey(value: string) {
   return value.trim();
 }
 
+/** A client adopts the host room project identifier so cross-platform commands share one routing key. */
+export function resolveClientSyncProjectKey(currentProjectKey: string, hostProjectKey: string) {
+  return normalizeSyncProjectKey(hostProjectKey) || normalizeSyncProjectKey(currentProjectKey);
+}
+
 export function createSyncRoomInvite(address: string, roomCode: string, projectSyncKey: string) {
   const normalized = createLanSyncAddress(address, "").replace(/^ws:\/\//, "");
   const separator = normalized.lastIndexOf(":");
