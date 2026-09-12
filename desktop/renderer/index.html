@@ -14,19 +14,21 @@
           <h1>采音脚本</h1>
           <p id="syncSummary" class="status-line">单机录音 · 等待导入脚本</p>
         </div>
-        <button id="importScriptButton" class="button secondary">导入 TXT 脚本</button>
       </header>
 
       <section class="workspace">
-        <aside class="sidebar glass">
-          <div class="panel-title"><span>任务与发音人</span><span id="scriptSummary" class="badge">尚未导入脚本</span></div>
-          <label>任务名称<input id="projectName" value="未命名任务" maxlength="48" /></label>
-          <label>发音人姓名<input id="speakerName" value="未命名" maxlength="48" /></label>
-          <div class="two-columns">
-            <label>性别<select id="speakerGender"><option>女</option><option>男</option><option selected>其他</option></select></label>
-            <label>年龄<input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
+        <aside class="sidebar fold-card glass" data-fold="task">
+          <button class="fold-trigger task-fold-trigger" type="button" aria-expanded="true"><span><b>任务与发音人</b><small id="scriptSummary">尚未导入脚本</small></span><span class="fold-chevron">⌄</span></button>
+          <div class="fold-content task-fold-content">
+            <label>任务名称<input id="projectName" value="未命名任务" maxlength="48" /></label>
+            <label>发音人姓名<input id="speakerName" value="未命名" maxlength="48" /></label>
+            <div class="two-columns">
+              <label>性别<select id="speakerGender"><option>女</option><option>男</option><option selected>其他</option></select></label>
+              <label>年龄<input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
+            </div>
+            <div class="task-actions"><button id="importScriptButton" class="button primary">导入 TXT 脚本</button><button id="newTaskButton" class="button secondary">新建任务</button><button id="deleteTaskButton" class="button danger">删除当前任务</button></div>
+            <div id="sentenceList" class="sentence-list" aria-label="句子列表"></div>
           </div>
-          <div id="sentenceList" class="sentence-list" aria-label="句子列表"></div>
         </aside>
 
         <section class="main-panel">

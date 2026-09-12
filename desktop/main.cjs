@@ -7,6 +7,7 @@ const { pathToFileURL } = require("node:url");
 
 const { getRecordingTarget } = require("./core/recording-paths.cjs");
 const { SyncRoom } = require("./core/sync-room.cjs");
+const { collectTaskOutputs } = require("./core/task-recordings.cjs");
 
 let mainWindow = null;
 let syncRoom = null;
@@ -54,6 +55,18 @@ async function saveRecording(payload) {
   return { path: target.path, fileName: target.fileName, directory: target.directory };
 }
 
+async function deleteTaskRecordings(payload) {
+  const projectName = String(payload?.project?.name ?? "").trim();
+  if (!projectName) throw new Error("任务名称无效，无法删除任务录音。");
+  const entries = collectTaskOutputs(desktopState.outputs, projectName);
+  for (const [key, recordingPath] of entries) {
+    try { await fs.rm(recordingPath, { force: true }); }
+    finally { delete desktopState.outputs[key]; }
+  }
+  await saveState();
+  return { deletedCount: entries.length };
+}
+
 function sendSyncEvent(event) { mainWindow?.webContents.send("sync:event", event); }
 
 function createWindow() {
@@ -96,6 +109,7 @@ ipcMain.handle("dialog:open-script", async () => {
   return { name: path.basename(filePath), content: await fs.readFile(filePath, "utf8") };
 });
 ipcMain.handle("recording:save", async (_event, payload) => saveRecording(payload));
+ipcMain.handle("recording:delete-task", async (_event, payload) => deleteTaskRecordings(payload));
 ipcMain.handle("recording:get", (_event, payload) => {
   const { project, speaker, sentenceIndex } = payload ?? {};
   if (!project?.name || !speaker?.name || !Number.isInteger(sentenceIndex) || sentenceIndex < 1) return undefined;
