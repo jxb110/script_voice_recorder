@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appendWaveformSample, classifyWaveformSample, normalizeMetering, resampleWaveform, waveformBarHalfHeight, waveformDisplayStrength } from "@/lib/waveform-math";
+import { appendWaveformSample, classifyWaveformSample, createSymmetricWaveformPaths, normalizeMetering, resampleWaveform, waveformBarHalfHeight, waveformDisplayStrength } from "@/lib/waveform-math";
 
 describe("录音波形数据转换", () => {
   it("将 Android 的负分贝计量归一化为可绘制强度", () => {
@@ -49,5 +49,13 @@ describe("录音波形数据转换", () => {
     expect(waveformBarHalfHeight(0.025, height)).toBeLessThanOrEqual(safeHalfHeight);
     expect(waveformBarHalfHeight(1, height)).toBeLessThanOrEqual(safeHalfHeight);
     expect(waveformBarHalfHeight(1, height)).toBeGreaterThan(waveformBarHalfHeight(0.025, height));
+  });
+
+  it("为移动端生成与桌面端一致的绿色对称填充路径和居中基线", () => {
+    const paths = createSymmetricWaveformPaths([0.05, 0.9, 0.2], 360, 76);
+    expect(paths.pointCount).toBe(3);
+    expect(paths.upperPath).toMatch(/^M 0 38 L 0 /);
+    expect(paths.lowerPath).toMatch(/^M 360 38 L 240 /);
+    expect(paths.fillPath.match(/ Z /g)).toHaveLength(1);
   });
 });

@@ -50,3 +50,20 @@ export function resampleWaveform(samples: number[], count: number): number[] {
     return Math.max(MINIMUM_SAMPLE, Math.min(1, peak));
   });
 }
+
+/** Builds the top, bottom and filled SVG paths for the desktop-matched symmetric waveform. */
+export function createSymmetricWaveformPaths(samples: number[], width: number, height: number, maximumPoints = Math.floor(width)) {
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+  const center = safeHeight / 2;
+  if (!samples.length) return { upperPath: "", lowerPath: "", fillPath: "", pointCount: 0 };
+  const values = resampleWaveform(samples, Math.max(1, Math.min(Math.max(1, maximumPoints), samples.length || 1)));
+  const maxHeight = safeHeight * 0.44;
+  const points = values.map((sample, index) => ({
+    amplitude: Math.max(0.015, Math.min(1, sample)),
+    x: index * (safeWidth / values.length),
+  }));
+  const upperPath = `M 0 ${center} ${points.map((point) => `L ${point.x} ${center - point.amplitude * maxHeight}`).join(" ")} L ${safeWidth} ${center}`;
+  const lowerPath = `M ${safeWidth} ${center} ${points.slice().reverse().map((point) => `L ${point.x} ${center + point.amplitude * maxHeight}`).join(" ")} L 0 ${center}`;
+  return { upperPath, lowerPath, fillPath: `${upperPath} Z ${lowerPath} Z`, pointCount: points.length };
+}
