@@ -51,7 +51,7 @@ if (!Number.isSafeInteger(androidVersionCode) || androidVersionCode < 4) {
 const config: ExpoConfig = {
   name: env.appName,
   slug: env.appSlug,
-  version: "3.0.0",
+  version: "4.0.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: env.scheme,
