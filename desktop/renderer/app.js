@@ -1,12 +1,12 @@
 const bridge = window.desktopBridge;
 const elementIds = [
-  "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "readingText", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
+  "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "readingText", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "waveCursor", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 const missingElement = elementIds.find((id) => !elements[id]);
 if (missingElement) throw new Error(`桌面录音界面缺少必要元素：${missingElement}`);
 
-const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, mediaStream: null, chunks: [], playing: null, recorded: new Map(), wave: [], waveFrame: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [] };
+const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, analyser: null, mediaStream: null, chunks: [], playing: null, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [] };
 const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot"];
 
 function cleanText(value) { return String(value ?? "").trim(); }
@@ -147,26 +147,79 @@ async function listMicrophones() {
   catch (error) { elements.microphone.replaceChildren(new Option("麦克风权限未授予", "")); setMessage(`无法读取麦克风：${error.message}`, true); }
 }
 
-function waveformFromSamples(samples) { let peak = 0; for (let index = 0; index < samples.length; index += 1) peak = Math.max(peak, Math.abs(samples[index])); return peak; }
-function scheduleWaveDraw() { if (state.waveFrame) return; state.waveFrame = requestAnimationFrame(() => { state.waveFrame = 0; drawWave(); }); }
+const WAVE_SAMPLE_INTERVAL = 25;
+
+function scheduleWaveDraw() { if (state.waveRenderFrame) return; state.waveRenderFrame = requestAnimationFrame(() => { state.waveRenderFrame = 0; drawWave(); }); }
+
+function getRealtimeAmplitude() {
+  if (!state.analyser) return 0;
+  const data = new Uint8Array(state.analyser.fftSize);
+  state.analyser.getByteTimeDomainData(data);
+  let sum = 0;
+  for (let index = 0; index < data.length; index += 1) { const value = (data[index] - 128) / 128; sum += value * value; }
+  return Math.min(1, Math.sqrt(sum / data.length) * 3.8);
+}
+
+function startRealtimeWaveform() {
+  const capture = (timestamp) => {
+    if (!state.audio || !state.analyser) return;
+    state.waveCaptureFrame = requestAnimationFrame(capture);
+    if (timestamp - state.waveLastSampleAt < WAVE_SAMPLE_INTERVAL) return;
+    state.waveLastSampleAt = timestamp;
+    state.wave.push(getRealtimeAmplitude());
+    scheduleWaveDraw();
+  };
+  state.waveLastSampleAt = 0;
+  state.waveCaptureFrame = requestAnimationFrame(capture);
+}
+
+function stopRealtimeWaveform() {
+  if (state.waveCaptureFrame) cancelAnimationFrame(state.waveCaptureFrame);
+  state.waveCaptureFrame = 0;
+}
+
+function calculateRmsAmplitude(samples, start, end) {
+  let sum = 0;
+  for (let index = start; index < end; index += 1) { const value = samples[index] || 0; sum += value * value; }
+  return Math.min(1, Math.sqrt(sum / Math.max(1, end - start)) * 3.8);
+}
+
+async function loadPlaybackWaveform(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`无法读取 WAV 波形：${response.status}`);
+  const decoder = new AudioContext();
+  try {
+    const decoded = await decoder.decodeAudioData((await response.arrayBuffer()).slice(0));
+    const samples = decoded.getChannelData(0);
+    const samplesPerWindow = Math.max(1, Math.round(decoded.sampleRate * (WAVE_SAMPLE_INTERVAL / 1000)));
+    const values = [];
+    for (let start = 0; start < samples.length; start += samplesPerWindow) values.push(calculateRmsAmplitude(samples, start, Math.min(samples.length, start + samplesPerWindow)));
+    state.wave = values;
+    scheduleWaveDraw();
+  } finally { await decoder.close(); }
+}
+
 function drawWave() {
   const canvas = elements.waveCanvas; const bounds = canvas.getBoundingClientRect(); const pixelRatio = window.devicePixelRatio || 1; const width = Math.max(1, Math.floor(bounds.width)); const height = Math.max(1, Math.floor(bounds.height));
   if (canvas.width !== width * pixelRatio || canvas.height !== height * pixelRatio) { canvas.width = width * pixelRatio; canvas.height = height * pixelRatio; }
-  const context = canvas.getContext("2d"); context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0); context.clearRect(0, 0, width, height);
-  const values = state.wave.slice(-1_600); const center = height / 2; const lineWidth = 1; const density = Math.max(1, Math.floor(width));
-  const glow = context.createLinearGradient(0, 0, 0, height); glow.addColorStop(0, "rgba(45,124,242,.92)"); glow.addColorStop(.5, "rgba(59,176,217,.82)"); glow.addColorStop(1, "rgba(84,111,229,.92)"); context.strokeStyle = glow; context.lineWidth = lineWidth;
-  for (let pixel = 0; pixel < density; pixel += 1) { const start = Math.floor((pixel * values.length) / density); const end = Math.max(start + 1, Math.ceil(((pixel + 1) * values.length) / density)); let value = 0; for (let index = start; index < end; index += 1) value = Math.max(value, values[index] || 0); const gated = Math.max(0, value - .008); const normalized = Math.min(1, Math.pow(gated / .26, .62)); const amplitude = Math.max(1, normalized * (height * .43)); const x = pixel + .5; context.beginPath(); context.moveTo(x, center - amplitude); context.lineTo(x, center + amplitude); context.stroke(); }
-  context.fillStyle = "rgba(255,255,255,.32)"; context.fillRect(0, center, width, 1);
+  const context = canvas.getContext("2d"); context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0); context.clearRect(0, 0, width, height); context.fillStyle = "#101113"; context.fillRect(0, 0, width, height);
+  const center = height / 2; context.strokeStyle = "rgba(255,255,255,.10)"; context.lineWidth = 1; context.beginPath(); context.moveTo(0, center); context.lineTo(width, center); context.stroke();
+  elements.waveCursor.classList.toggle("active", Boolean(state.audio)); elements.waveCursor.style.left = `${Math.max(0, width - 2)}px`;
+  if (!state.wave.length) return;
+  const maxPoints = Math.max(1, Math.min(state.wave.length, Math.floor(width))); const step = state.wave.length / maxPoints; const maxHeight = height * .44; const points = [];
+  for (let index = 0; index < maxPoints; index += 1) { const start = Math.floor(index * step); const end = Math.max(start + 1, Math.floor((index + 1) * step)); let amplitude = 0; for (let sample = start; sample < end && sample < state.wave.length; sample += 1) amplitude = Math.max(amplitude, state.wave[sample] || 0); points.push({ x: index * (width / maxPoints), amplitude: Math.max(amplitude, .015) }); }
+  const upperPath = new Path2D(); const lowerPath = new Path2D(); upperPath.moveTo(0, center); points.forEach((point) => upperPath.lineTo(point.x, center - point.amplitude * maxHeight)); upperPath.lineTo(width, center); lowerPath.moveTo(width, center); points.slice().reverse().forEach((point) => lowerPath.lineTo(point.x, center + point.amplitude * maxHeight)); lowerPath.lineTo(0, center);
+  const waveform = new Path2D(); waveform.addPath(upperPath); waveform.addPath(lowerPath); context.fillStyle = "#42d66b"; context.fill(waveform); context.globalAlpha = .15; context.fillStyle = "#ffffff"; context.fill(upperPath); context.globalAlpha = 1;
 }
 
 async function startRecording() {
   requireSentences(); if (state.audio) return;
   stopPlayback();
   const settings = state.settings; const constraints = { audio: { deviceId: elements.microphone.value ? { exact: elements.microphone.value } : undefined, channelCount: settings.channels, sampleRate: settings.sampleRate, echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
-  state.mediaStream = await navigator.mediaDevices.getUserMedia(constraints); const audio = new AudioContext({ sampleRate: settings.sampleRate }); const source = audio.createMediaStreamSource(state.mediaStream); const processor = audio.createScriptProcessor(4096, settings.channels, settings.channels); const silence = audio.createGain(); silence.gain.value = 0;
-  state.audio = audio; state.chunks = Array.from({ length: settings.channels }, () => []); state.wave = [];
-  processor.onaudioprocess = (event) => { for (let channel = 0; channel < settings.channels; channel += 1) state.chunks[channel].push(new Float32Array(event.inputBuffer.getChannelData(Math.min(channel, event.inputBuffer.numberOfChannels - 1)))); state.wave.push(waveformFromSamples(event.inputBuffer.getChannelData(0))); if (state.wave.length > 1_600) state.wave.shift(); scheduleWaveDraw(); };
-  source.connect(processor); processor.connect(silence); silence.connect(audio.destination); state.audioNode = { source, processor, silence };
+  state.mediaStream = await navigator.mediaDevices.getUserMedia(constraints); const audio = new AudioContext({ sampleRate: settings.sampleRate }); const source = audio.createMediaStreamSource(state.mediaStream); const analyser = audio.createAnalyser(); const processor = audio.createScriptProcessor(4096, settings.channels, settings.channels); const silence = audio.createGain(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = .75; silence.gain.value = 0;
+  state.audio = audio; state.analyser = analyser; state.chunks = Array.from({ length: settings.channels }, () => []); state.wave = [];
+  processor.onaudioprocess = (event) => { for (let channel = 0; channel < settings.channels; channel += 1) state.chunks[channel].push(new Float32Array(event.inputBuffer.getChannelData(Math.min(channel, event.inputBuffer.numberOfChannels - 1)))); };
+  source.connect(analyser); source.connect(processor); processor.connect(silence); silence.connect(audio.destination); state.audioNode = { source, analyser, processor, silence }; startRealtimeWaveform(); scheduleWaveDraw();
   elements.recordButton.textContent = "停止录制"; setRecordPhase(settings.leadingSilenceMs ? "leading" : "recording", settings.leadingSilenceMs); await bridge.sync.state({ state: settings.leadingSilenceMs ? "leading" : "recording", sentenceIndex: state.currentIndex });
   if (settings.leadingSilenceMs) state.leadingTimer = setTimeout(() => { if (state.audio) { setRecordPhase("recording"); bridge.sync.state({ state: "recording", sentenceIndex: state.currentIndex }); } }, settings.leadingSilenceMs);
 }
@@ -177,13 +230,13 @@ function bytesToBase64(bytes) { let binary = ""; const size = 0x8000; for (let o
 
 async function stopRecording() {
   if (!state.audio) return; const settings = state.settings; if (state.leadingTimer) clearTimeout(state.leadingTimer); state.leadingTimer = null; setRecordPhase(settings.trailingSilenceMs ? "trailing" : "saving", settings.trailingSilenceMs); await bridge.sync.state({ state: settings.trailingSilenceMs ? "trailing" : "saving", sentenceIndex: state.currentIndex }); if (settings.trailingSilenceMs) await new Promise((resolve) => setTimeout(resolve, settings.trailingSilenceMs)); setRecordPhase("saving");
-  const audio = state.audio; const { source, processor, silence } = state.audioNode; source.disconnect(); processor.disconnect(); silence.disconnect(); state.mediaStream.getTracks().forEach((track) => track.stop()); await audio.close(); state.audio = null; state.audioNode = null;
+  const audio = state.audio; const { source, analyser, processor, silence } = state.audioNode; stopRealtimeWaveform(); source.disconnect(); analyser.disconnect(); processor.disconnect(); silence.disconnect(); state.mediaStream.getTracks().forEach((track) => track.stop()); await audio.close(); state.audio = null; state.analyser = null; state.audioNode = null; scheduleWaveDraw();
   const sentence = currentSentence(); const bytes = encodeWav(state.chunks, settings.channels, audio.sampleRate, settings.bitDepth); const result = await bridge.saveRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: sentence.index, base64: bytesToBase64(bytes) }); state.recorded.set(state.currentIndex, result.path); elements.recordButton.textContent = "开始录制"; setRecordPhase("saved"); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex });
   const nextIndex = getAutoNext(state.currentIndex, state.sentences.length); if (nextIndex === undefined) setMessage(`已保存：${result.fileName}。全部句子已完成；选择目标句后再次录制即可覆盖旧文件。`); else { state.currentIndex = nextIndex; setMessage(`已保存：${result.fileName}。已自动跳到第 ${nextIndex + 1} 句。`); } render();
 }
 
 async function jumpTo(index, sendCommand = false) { if (index < 0 || index >= state.sentences.length) return; stopPlayback(); state.currentIndex = index; if (sendCommand) await bridge.sync.command("jump", index); await bridge.sync.state({ state: state.sync.mode === "idle" ? "idle" : "ready", sentenceIndex: index }); render(); }
-async function playCurrent() { const saved = await bridge.getRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: currentSentence()?.index }); if (!saved?.url) { setMessage("当前句尚未录制。", true); return; } stopPlayback(); const audio = new Audio(saved.url); state.playing = audio; setRecordPhase("playing"); setMessage(`播放：${saved.path}`); audio.onended = () => { if (state.playing === audio) { state.playing = null; setRecordPhase("ready"); } }; audio.onerror = () => { if (state.playing === audio) { state.playing = null; setRecordPhase("error"); setMessage("无法播放当前 WAV 文件。", true); } }; await audio.play(); }
+async function playCurrent() { const saved = await bridge.getRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: currentSentence()?.index }); if (!saved?.url) { setMessage("当前句尚未录制。", true); return; } stopPlayback(); state.wave = []; scheduleWaveDraw(); try { await loadPlaybackWaveform(saved.url); } catch (error) { console.warn("无法解析播放波形", error); } const audio = new Audio(saved.url); state.playing = audio; setRecordPhase("playing"); setMessage(`播放：${saved.path}`); audio.onended = () => { if (state.playing === audio) { state.playing = null; setRecordPhase("ready"); } }; audio.onerror = () => { if (state.playing === audio) { state.playing = null; setRecordPhase("error"); setMessage("无法播放当前 WAV 文件。", true); } }; await audio.play(); }
 async function requestRecordToggle() { if (state.sync.mode === "client") return; if (state.sync.mode === "host") await bridge.sync.command(state.audio ? "stop" : "start", state.currentIndex); else if (state.audio) await stopRecording(); else await startRecording(); }
 async function requestJump(delta) { const target = Math.min(state.sentences.length - 1, Math.max(0, state.currentIndex + delta)); if (target === state.currentIndex || state.sync.mode === "client") return; if (state.sync.mode === "host") await bridge.sync.command(delta < 0 ? "previous" : "next", target); else await jumpTo(target); }
 async function enterSyncRecording() { if (state.sync.mode !== "host") return; await bridge.sync.command("open", state.currentIndex); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex }); setMessage("已通知所有在线设备进入同步录制。"); }
