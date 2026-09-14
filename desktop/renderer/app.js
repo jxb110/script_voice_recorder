@@ -6,10 +6,12 @@ const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElem
 const missingElement = elementIds.find((id) => !elements[id]);
 if (missingElement) throw new Error(`桌面录音界面缺少必要元素：${missingElement}`);
 
-const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, analyser: null, mediaStream: null, chunks: [], playing: null, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [] };
+const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, analyser: null, mediaStream: null, chunks: [], playing: null, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "" };
 const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot"];
+const taskIdentityFields = ["projectName", "speakerName", "speakerGender", "speakerAge"];
 
 function cleanText(value) { return String(value ?? "").trim(); }
+function createTaskId() { return `desktop_task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
 function sentenceText(sentence) { return sentence?.tokens?.map((token) => token.char).join("") || sentence?.rawText || ""; }
 function currentSentence() { return state.sentences[state.currentIndex]; }
 function currentProject() { return { name: cleanText(elements.projectName.value) || "未命名任务" }; }
@@ -17,6 +19,10 @@ function currentSpeaker() { return { name: cleanText(elements.speakerName.value)
 function projectKey() { return `desktop|${state.sentences.length}|${state.sentences.map(sentenceText).join("\u241E").length}`; }
 function setMessage(message, error = false) { elements.recordMessage.textContent = message; elements.recordMessage.style.color = error ? "#bd3047" : ""; }
 function requireSentences() { if (!state.sentences.length) throw new Error("请先导入 TXT 脚本。"); }
+function taskHasRecordings(task) { return task?.recorded instanceof Map ? task.recorded.size > 0 : Array.isArray(task?.recorded) && task.recorded.length > 0; }
+function taskLocked() { return state.recorded.size > 0; }
+function serializeTask(task) { return { ...task, recorded: task.recorded instanceof Map ? [...task.recorded.entries()] : task.recorded || [] }; }
+async function persistTaskWorkspace() { await bridge.saveTaskWorkspace({ current: serializeTask(captureCurrentTask()), archive: state.taskArchive.map(serializeTask) }); }
 function getAutoNext(index, total) { return index + 1 < total ? index + 1 : undefined; }
 function stopPlayback() { if (!state.playing) return; state.playing.pause(); state.playing.currentTime = 0; state.playing = null; }
 function formatDuration(milliseconds) { const totalTenths = Math.max(0, Math.ceil(milliseconds / 100)); return `${Math.floor(totalTenths / 10)}.${totalTenths % 10}s`; }
@@ -64,21 +70,22 @@ function setFold(card, folded) {
 }
 
 function taskHasContent(task) {
-  return task.sentences.length > 0 || task.project.name !== "未命名任务" || task.speaker.name !== "未命名";
+  return task.sentences.length > 0 || taskHasRecordings(task) || task.project.name !== "未命名任务" || task.speaker.name !== "未命名";
 }
 
 function captureCurrentTask() {
-  return { id: `desktop_task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, project: currentProject(), speaker: currentSpeaker(), sentences: state.sentences, currentIndex: state.currentIndex, recorded: new Map(state.recorded), scriptName: state.scriptName };
+  return { id: state.currentTaskId || createTaskId(), project: currentProject(), speaker: currentSpeaker(), sentences: state.sentences, currentIndex: state.currentIndex, recorded: new Map(state.recorded), scriptName: state.scriptName };
 }
 
 function restoreTask(task) {
+  state.currentTaskId = task.id || createTaskId();
   elements.projectName.value = task.project.name;
   elements.speakerName.value = task.speaker.name;
   elements.speakerGender.value = task.speaker.gender;
   elements.speakerAge.value = String(task.speaker.age || 0);
   state.sentences = task.sentences;
   state.currentIndex = Math.min(Math.max(0, task.currentIndex), Math.max(0, task.sentences.length - 1));
-  state.recorded = new Map(task.recorded);
+  state.recorded = new Map(task.recorded instanceof Map ? task.recorded : task.recorded || []);
   state.scriptName = task.scriptName;
   state.wave = [];
   setRecordPhase("ready");
@@ -94,8 +101,8 @@ function renderTaskArchive() {
     const content = document.createElement("div"); content.className = "fold-content";
     const meta = document.createElement("p"); meta.className = "archived-meta"; meta.textContent = task.scriptName ? `脚本：${task.scriptName}` : "尚未导入脚本";
     const actions = document.createElement("div"); actions.className = "archived-actions";
-    const open = document.createElement("button"); open.className = "button secondary"; open.type = "button"; open.textContent = "继续录制"; open.onclick = () => { const current = captureCurrentTask(); if (taskHasContent(current)) state.taskArchive.push(current); state.taskArchive = state.taskArchive.filter((item) => item.id !== task.id); restoreTask(task); setFold(elements.currentTaskCard, false); render(); };
-    const remove = document.createElement("button"); remove.className = "button danger"; remove.type = "button"; remove.textContent = "删除任务"; remove.onclick = async () => { if (!window.confirm(`确定删除桌面任务“${task.project.name}”吗？该任务已管理的 WAV 会一并删除。`)) return; try { const result = await bridge.deleteTask({ project: task.project }); state.taskArchive = state.taskArchive.filter((item) => item.id !== task.id); setMessage(`已删除任务及 ${result.deletedCount} 条桌面 WAV 记录。`); render(); } catch (error) { setMessage(error.message, true); } };
+    const open = document.createElement("button"); open.className = "button secondary"; open.type = "button"; open.textContent = "继续录制"; open.onclick = async () => { const current = captureCurrentTask(); if (taskHasContent(current)) state.taskArchive.push(current); state.taskArchive = state.taskArchive.filter((item) => item.id !== task.id); restoreTask(task); setFold(elements.currentTaskCard, false); await persistTaskWorkspace(); render(); };
+    const remove = document.createElement("button"); remove.className = "button danger"; remove.type = "button"; remove.textContent = "删除任务"; remove.onclick = async () => { if (!window.confirm(`确定删除桌面任务“${task.project.name}”吗？该任务已管理的 WAV 会一并删除。`)) return; try { const result = await bridge.deleteTask({ project: task.project }); state.taskArchive = state.taskArchive.filter((item) => item.id !== task.id); await persistTaskWorkspace(); setMessage(`已删除任务及 ${result.deletedCount} 条桌面 WAV 记录。`); render(); } catch (error) { setMessage(error.message, true); } };
     actions.append(open, remove); content.append(meta, actions); card.append(trigger, content); fragment.append(card);
   });
   elements.taskArchive.replaceChildren(fragment);
@@ -135,11 +142,28 @@ function renderSync() {
 
 function render() {
   const sentence = currentSentence();
-  elements.scriptSummary.textContent = state.sentences.length ? `已导入 ${state.sentences.length} 句 · ${state.scriptName || "未命名脚本"}` : "尚未导入脚本";
+  const locked = taskLocked();
+  taskIdentityFields.forEach((field) => { elements[field].disabled = locked; });
+  elements.importScriptButton.disabled = locked;
+  elements.importScriptButton.title = locked ? "任务已有录音，不能更换脚本或修改任务与发音人信息。" : "导入 TXT 脚本";
+  elements.scriptSummary.textContent = state.sentences.length ? `已导入 ${state.sentences.length} 句 · ${state.scriptName || "未命名脚本"}${locked ? " · 已录音，信息已锁定" : ""}` : "尚未导入脚本";
   elements.progressText.textContent = sentence ? `第 ${state.currentIndex + 1} / ${state.sentences.length} 句` : "尚未导入脚本";
   elements.promptText.textContent = sentence?.prompt || "导入脚本后显示提示词";
-  elements.readingText.textContent = sentenceText(sentence) || "请先导入 TXT 脚本";
+  renderReadingText(sentence);
   renderSync(); renderTaskArchive(); scheduleWaveDraw();
+}
+
+function renderReadingText(sentence) {
+  const tokens = sentence?.tokens || [];
+  if (!tokens.length) { elements.readingText.textContent = "请先导入 TXT 脚本"; return; }
+  const fragment = document.createDocumentFragment();
+  tokens.forEach((token, index) => {
+    const unit = document.createElement("span"); unit.className = "phonetic-token";
+    const pinyin = document.createElement("small"); pinyin.className = "phonetic-pinyin"; pinyin.textContent = token.pinyin || " ";
+    const character = document.createElement("strong"); character.className = "phonetic-character"; character.textContent = token.char;
+    unit.append(pinyin, character); unit.dataset.tokenIndex = String(index); fragment.append(unit);
+  });
+  elements.readingText.replaceChildren(fragment);
 }
 
 async function listMicrophones() {
@@ -231,11 +255,11 @@ function bytesToBase64(bytes) { let binary = ""; const size = 0x8000; for (let o
 async function stopRecording() {
   if (!state.audio) return; const settings = state.settings; if (state.leadingTimer) clearTimeout(state.leadingTimer); state.leadingTimer = null; setRecordPhase(settings.trailingSilenceMs ? "trailing" : "saving", settings.trailingSilenceMs); await bridge.sync.state({ state: settings.trailingSilenceMs ? "trailing" : "saving", sentenceIndex: state.currentIndex }); if (settings.trailingSilenceMs) await new Promise((resolve) => setTimeout(resolve, settings.trailingSilenceMs)); setRecordPhase("saving");
   const audio = state.audio; const { source, analyser, processor, silence } = state.audioNode; stopRealtimeWaveform(); source.disconnect(); analyser.disconnect(); processor.disconnect(); silence.disconnect(); state.mediaStream.getTracks().forEach((track) => track.stop()); await audio.close(); state.audio = null; state.analyser = null; state.audioNode = null; scheduleWaveDraw();
-  const sentence = currentSentence(); const bytes = encodeWav(state.chunks, settings.channels, audio.sampleRate, settings.bitDepth); const result = await bridge.saveRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: sentence.index, base64: bytesToBase64(bytes) }); state.recorded.set(state.currentIndex, result.path); elements.recordButton.textContent = "开始录制"; setRecordPhase("saved"); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex });
+  const sentence = currentSentence(); const bytes = encodeWav(state.chunks, settings.channels, audio.sampleRate, settings.bitDepth); const result = await bridge.saveRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: sentence.index, base64: bytesToBase64(bytes) }); state.recorded.set(state.currentIndex, result.path); await persistTaskWorkspace(); elements.recordButton.textContent = "开始录制"; setRecordPhase("saved"); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex });
   const nextIndex = getAutoNext(state.currentIndex, state.sentences.length); if (nextIndex === undefined) setMessage(`已保存：${result.fileName}。全部句子已完成；选择目标句后再次录制即可覆盖旧文件。`); else { state.currentIndex = nextIndex; setMessage(`已保存：${result.fileName}。已自动跳到第 ${nextIndex + 1} 句。`); } render();
 }
 
-async function jumpTo(index, sendCommand = false) { if (index < 0 || index >= state.sentences.length) return; stopPlayback(); state.currentIndex = index; if (sendCommand) await bridge.sync.command("jump", index); await bridge.sync.state({ state: state.sync.mode === "idle" ? "idle" : "ready", sentenceIndex: index }); render(); }
+async function jumpTo(index, sendCommand = false) { if (index < 0 || index >= state.sentences.length) return; stopPlayback(); state.currentIndex = index; await persistTaskWorkspace(); if (sendCommand) await bridge.sync.command("jump", index); await bridge.sync.state({ state: state.sync.mode === "idle" ? "idle" : "ready", sentenceIndex: index }); render(); }
 async function playCurrent() { const saved = await bridge.getRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: currentSentence()?.index }); if (!saved?.url) { setMessage("当前句尚未录制。", true); return; } stopPlayback(); state.wave = []; scheduleWaveDraw(); try { await loadPlaybackWaveform(saved.url); } catch (error) { console.warn("无法解析播放波形", error); } const audio = new Audio(saved.url); state.playing = audio; setRecordPhase("playing"); setMessage(`播放：${saved.path}`); audio.onended = () => { if (state.playing === audio) { state.playing = null; setRecordPhase("ready"); } }; audio.onerror = () => { if (state.playing === audio) { state.playing = null; setRecordPhase("error"); setMessage("无法播放当前 WAV 文件。", true); } }; await audio.play(); }
 async function requestRecordToggle() { if (state.sync.mode === "client") return; if (state.sync.mode === "host") await bridge.sync.command(state.audio ? "stop" : "start", state.currentIndex); else if (state.audio) await stopRecording(); else await startRecording(); }
 async function requestJump(delta) { const target = Math.min(state.sentences.length - 1, Math.max(0, state.currentIndex + delta)); if (target === state.currentIndex || state.sync.mode === "client") return; if (state.sync.mode === "host") await bridge.sync.command(delta < 0 ? "previous" : "next", target); else await jumpTo(target); }
@@ -250,27 +274,29 @@ async function completeCurrentTask(message = "任务已完成。点击左侧任�
   setRecordPhase("complete");
   setMessage(message);
   setFold(elements.currentTaskCard, true);
+  await persistTaskWorkspace();
   render();
 }
 
-async function hydrateRecordedState() { if (!state.sentences.length) return; const project = currentProject(); const speaker = currentSpeaker(); const saved = await Promise.all(state.sentences.map((sentence, index) => bridge.getRecording({ project, speaker, sentenceIndex: sentence.index }).then((recording) => ({ index, recording })))); state.recorded.clear(); saved.forEach(({ index, recording }) => { if (recording?.path) state.recorded.set(index, recording.path); }); render(); }
+async function hydrateRecordedState({ persist = true } = {}) { if (!state.sentences.length) { state.recorded.clear(); render(); if (persist) await persistTaskWorkspace(); return; } const project = currentProject(); const speaker = currentSpeaker(); const saved = await Promise.all(state.sentences.map((sentence, index) => bridge.getRecording({ project, speaker, sentenceIndex: sentence.index }).then((recording) => ({ index, recording })))); state.recorded.clear(); saved.forEach(({ index, recording }) => { if (recording?.path) state.recorded.set(index, recording.path); }); render(); if (persist) await persistTaskWorkspace(); }
 async function resetCurrentTask({ resetIdentity }) {
   if (state.audio) throw new Error("请先停止当前录制，再新建或删除任务。");
   stopPlayback();
   if (state.sync.mode !== "idle") state.sync = await bridge.sync.stop();
-  state.sentences = []; state.currentIndex = 0; state.scriptName = ""; state.recorded.clear(); state.wave = [];
+  state.sentences = []; state.currentIndex = 0; state.scriptName = ""; state.recorded.clear(); state.wave = []; state.currentTaskId = createTaskId();
   if (resetIdentity) { elements.projectName.value = "未命名任务"; elements.speakerName.value = "未命名"; elements.speakerGender.value = "其他"; elements.speakerAge.value = "0"; }
   setRecordPhase("ready"); render();
 }
-elements.importScriptButton.onclick = async () => { try { const file = await bridge.openScript(); if (!file) return; state.sentences = parseScript(file.content); state.scriptName = file.name; state.currentIndex = 0; state.recorded.clear(); await hydrateRecordedState(); setMessage(`已导入 ${state.sentences.length} 句脚本。`); render(); } catch (error) { setMessage(error.message, true); } };
-elements.newTaskButton.onclick = async () => { try { if (!window.confirm("新建任务会关闭当前同步会话。当前任务会保留为可展开模块，已保存 WAV 文件不会删除。是否继续？")) return; const previous = captureCurrentTask(); if (taskHasContent(previous)) state.taskArchive.push(previous); await resetCurrentTask({ resetIdentity: true }); setFold(elements.currentTaskCard, false); setMessage("已新建空任务，请填写任务与发音人信息后导入 TXT 脚本。"); } catch (error) { setMessage(error.message, true); } };
-elements.deleteTaskButton.onclick = async () => { try { const project = currentProject(); if (!window.confirm(`确定删除桌面任务“${project.name}”吗？该任务已管理的 WAV 文件会一并删除，此操作不可恢复。`)) return; const result = await bridge.deleteTask({ project }); await resetCurrentTask({ resetIdentity: true }); setMessage(`已删除任务及 ${result.deletedCount} 条桌面 WAV 记录。`); } catch (error) { setMessage(error.message, true); } };
+elements.importScriptButton.onclick = async () => { try { if (taskLocked()) throw new Error("任务已有录音，不能更换脚本。请新建任务，或先删除当前任务。 "); const file = await bridge.openScript(); if (!file) return; state.sentences = parseScript(file.content); state.scriptName = file.name; state.currentIndex = 0; state.recorded.clear(); await hydrateRecordedState({ persist: false }); await persistTaskWorkspace(); setMessage(`已导入 ${state.sentences.length} 句脚本。`); render(); } catch (error) { setMessage(error.message, true); } };
+elements.newTaskButton.onclick = async () => { try { if (!window.confirm("新建任务会关闭当前同步会话。当前任务会保留为可展开模块，已保存 WAV 文件不会删除。是否继续？")) return; const previous = captureCurrentTask(); if (taskHasContent(previous)) state.taskArchive.push(previous); await resetCurrentTask({ resetIdentity: true }); setFold(elements.currentTaskCard, false); await persistTaskWorkspace(); setMessage("已新建空任务，现在可以立即填写任务与发音人信息，再导入 TXT 脚本。"); } catch (error) { setMessage(error.message, true); } };
+elements.deleteTaskButton.onclick = async () => { try { const project = currentProject(); if (!window.confirm(`确定删除桌面任务“${project.name}”吗？该任务已管理的 WAV 文件会一并删除，此操作不可恢复。`)) return; const result = await bridge.deleteTask({ project }); await resetCurrentTask({ resetIdentity: true }); await persistTaskWorkspace(); setMessage(`已删除任务及 ${result.deletedCount} 条桌面 WAV 记录。`); } catch (error) { setMessage(error.message, true); } };
 elements.settingsActionButton.onclick = async () => { try { if (!state.editingSettings) { setSettingsEditMode(true); setMessage("现在可以修改电脑录音配置。修改后请保存。"); return; } state.settings = await bridge.saveSettings({ sampleRate: Number(elements.sampleRate.value), channels: Number(elements.channels.value), bitDepth: Number(elements.bitDepth.value), leadingSilenceMs: Number(elements.leadingSilenceMs.value), trailingSilenceMs: Number(elements.trailingSilenceMs.value), recordingRoot: elements.recordingRoot.value }); setSettingsEditMode(false); setMessage("电脑录音配置已保存。新录制将使用此配置。"); } catch (error) { setMessage(error.message, true); } };
 elements.choosePathButton.onclick = async () => { const directory = await bridge.chooseDirectory(); if (directory) elements.recordingRoot.value = directory; };
 elements.recordButton.onclick = () => requestRecordToggle().catch((error) => setMessage(error.message, true)); elements.previousButton.onclick = () => requestJump(-1).catch((error) => setMessage(error.message, true)); elements.nextButton.onclick = () => requestJump(1).catch((error) => setMessage(error.message, true)); elements.playButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("play", state.currentIndex); else playCurrent().catch((error) => setMessage(error.message, true)); }; elements.completeButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("complete", state.currentIndex); else completeCurrentTask().catch((error) => setMessage(error.message, true)); };
 elements.hostButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.host({ projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); elements.roomCode.value = state.sync.roomCode; render(); } catch (error) { setMessage(error.message, true); } }; elements.joinButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.join({ host: elements.hostIp.value.trim(), port: Number(elements.hostPort.value), roomCode: elements.roomCode.value, projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); render(); } catch (error) { setMessage(error.message, true); } }; elements.closeSyncButton.onclick = async () => { state.sync = await bridge.sync.stop(); render(); }; elements.openSyncButton.onclick = enterSyncRecording;
 document.querySelectorAll(".fold-card").forEach((card) => card.querySelector(".fold-trigger").onclick = () => setFold(card, !card.classList.contains("folded")));
-elements.projectName.onchange = () => hydrateRecordedState().catch((error) => setMessage(error.message, true)); elements.speakerName.onchange = () => hydrateRecordedState().catch((error) => setMessage(error.message, true));
+taskIdentityFields.forEach((field) => { elements[field].oninput = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; });
+elements.projectName.onchange = () => { if (!taskLocked()) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerName.onchange = () => { if (!taskLocked()) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerGender.onchange = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; elements.speakerAge.onchange = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); };
 bridge.sync.onEvent((event) => { state.sync = event.session || state.sync; if (event.type === "command" && event.payload) handleCommand(event.payload); render(); });
 window.addEventListener("resize", scheduleWaveDraw);
-(async () => { state.settings = await bridge.getSettings(); for (const key of ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"]) elements[key].value = state.settings[key]; elements.deviceName.value = await bridge.getDeviceName(); state.sync = await bridge.sync.status(); await listMicrophones(); setSettingsEditMode(false); render(); })().catch((error) => setMessage(error.message, true));
+(async () => { state.settings = await bridge.getSettings(); for (const key of ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"]) elements[key].value = state.settings[key]; const workspace = await bridge.getTaskWorkspace(); state.taskArchive = (workspace.archive || []).map((task) => ({ ...task, recorded: new Map(task.recorded || []) })); if (workspace.current) restoreTask({ ...workspace.current, recorded: new Map(workspace.current.recorded || []) }); else await resetCurrentTask({ resetIdentity: true }); elements.deviceName.value = await bridge.getDeviceName(); state.sync = await bridge.sync.status(); await listMicrophones(); setSettingsEditMode(false); await hydrateRecordedState({ persist: true }); render(); })().catch((error) => setMessage(error.message, true));

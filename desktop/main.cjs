@@ -8,10 +8,11 @@ const { pathToFileURL } = require("node:url");
 const { getRecordingTarget } = require("./core/recording-paths.cjs");
 const { SyncRoom } = require("./core/sync-room.cjs");
 const { collectTaskOutputs } = require("./core/task-recordings.cjs");
+const { normalizeTaskWorkspace } = require("./core/task-workspace.cjs");
 
 let mainWindow = null;
 let syncRoom = null;
-let desktopState = { settings: { sampleRate: 48000, bitDepth: 16, channels: 1, leadingSilenceMs: 500, trailingSilenceMs: 500, recordingRoot: path.join(os.homedir(), "Documents") }, outputs: {} };
+let desktopState = { settings: { sampleRate: 48000, bitDepth: 16, channels: 1, leadingSilenceMs: 500, trailingSilenceMs: 500, recordingRoot: path.join(os.homedir(), "Documents") }, outputs: {}, taskWorkspace: { current: undefined, archive: [] } };
 
 const statePath = () => path.join(app.getPath("userData"), "desktop-state.json");
 const safeError = (error) => error instanceof Error ? error.message : "发生未知错误。";
@@ -20,7 +21,16 @@ const allowedChannels = new Set([1, 2]);
 const allowedSampleRates = new Set([16000, 22050, 24000, 44100, 48000]);
 
 async function loadState() {
-  try { desktopState = { ...desktopState, ...JSON.parse(await fs.readFile(statePath(), "utf8")) }; }
+  try {
+    const saved = JSON.parse(await fs.readFile(statePath(), "utf8"));
+    desktopState = {
+      ...desktopState,
+      ...saved,
+      settings: { ...desktopState.settings, ...(saved.settings || {}) },
+      outputs: saved.outputs && typeof saved.outputs === "object" ? saved.outputs : {},
+      taskWorkspace: normalizeTaskWorkspace(saved.taskWorkspace),
+    };
+  }
   catch { /* first start */ }
 }
 
@@ -120,6 +130,12 @@ ipcMain.handle("recording:get", async (_event, payload) => {
     catch { delete desktopState.outputs[key]; await saveState(); return undefined; }
   }
   return recordingPath ? { path: recordingPath, url: pathToFileURL(recordingPath).href } : undefined;
+});
+ipcMain.handle("tasks:get-workspace", () => desktopState.taskWorkspace);
+ipcMain.handle("tasks:save-workspace", async (_event, workspace) => {
+  desktopState.taskWorkspace = normalizeTaskWorkspace(workspace);
+  await saveState();
+  return desktopState.taskWorkspace;
 });
 ipcMain.handle("sync:host", async (_event, input) => syncRoom.host(input));
 ipcMain.handle("sync:join", async (_event, input) => syncRoom.join(input));

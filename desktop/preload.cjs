@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   saveRecording: (payload) => ipcRenderer.invoke("recording:save", payload),
   deleteTask: (payload) => ipcRenderer.invoke("recording:delete-task", payload),
   getRecording: (payload) => ipcRenderer.invoke("recording:get", payload),
+  getTaskWorkspace: () => ipcRenderer.invoke("tasks:get-workspace"),
+  saveTaskWorkspace: (workspace) => ipcRenderer.invoke("tasks:save-workspace", workspace),
   getDeviceName: () => ipcRenderer.invoke("system:device-name"),
   sync: {
     host: (input) => ipcRenderer.invoke("sync:host", input),
