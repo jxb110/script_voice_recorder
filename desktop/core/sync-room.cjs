@@ -174,6 +174,28 @@ class SyncRoom {
     return command;
   }
 
+  async removeClient(deviceId) {
+    return this.serializeLifecycle(() => this.removeClientInternal(deviceId));
+  }
+
+  removeClientInternal(deviceId) {
+    if (this.session.mode !== "host") throw new Error("只有主控端可以移除已加入的设备。");
+    const normalizedId = String(deviceId || "").trim();
+    const device = this.session.devices.find((item) => item.id === normalizedId && item.role === "client");
+    if (!device) throw new Error("未找到可移除的同步设备。");
+    const peer = [...this.peers].find((item) => item.deviceId === normalizedId);
+    this.session.devices = this.session.devices.filter((item) => item.id !== normalizedId);
+    if (peer) {
+      this.sendPeer(peer, { type: "removed", message: "主控端已将当前设备移出同步房间。" });
+      this.peers.delete(peer);
+      this.openSockets.delete(peer.socket);
+      peer.socket.destroy();
+    }
+    this.broadcastWelcome();
+    this.emit("device-removed", { deviceId: normalizedId });
+    return this.snapshot();
+  }
+
   handlePeer(socket) {
     const peer = { socket, buffer: "", protocolReady: false, deviceId: undefined };
     this.openSockets.add(socket);
@@ -232,6 +254,13 @@ class SyncRoom {
     } else if (message.type === "command") {
       this.session.lastCommand = message.command;
       this.emit("command", message.command);
+    } else if (message.type === "removed") {
+      if (this.heartbeat) clearInterval(this.heartbeat);
+      this.heartbeat = null;
+      if (this.client) this.client.destroy();
+      this.client = null;
+      this.session = { ...this.makeIdle(), error: message.message || "主控端已将当前设备移出同步房间。" };
+      this.emit("removed", message);
     } else if (message.type === "error") finish(new Error(message.message));
   }
 

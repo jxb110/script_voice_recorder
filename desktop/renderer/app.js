@@ -1,13 +1,13 @@
 const bridge = window.desktopBridge;
 const elementIds = [
-  "workspace", "sidebarResizeHandle", "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "hostInvite", "hostQrImage", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
+  "workspace", "sidebarResizeHandle", "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "hostInvite", "hostQrImage", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphoneList", "microphoneHelp", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 const missingElement = elementIds.find((id) => !elements[id]);
 if (missingElement) throw new Error(`桌面录音界面缺少必要元素：${missingElement}`);
 
-const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, analyser: null, mediaStream: null, chunks: [], playing: null, playbackFrame: 0, playbackProgress: 0, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, sidebarWidth: 340, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null, resizingSidebar: null };
-const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot"];
+const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, syncRecordingActive: false, audio: null, audioNode: null, analyser: null, mediaStreams: [], chunks: [], recordingChannels: 1, microphoneDevices: [], selectedMicrophoneIds: [], playing: null, playbackFrame: 0, playbackProgress: 0, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, sidebarWidth: 340, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null, resizingSidebar: null };
+const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"];
 const taskIdentityFields = ["projectName", "speakerName", "speakerGender", "speakerAge"];
 const TRANSLATIONS = {
   zh: { appTitle: "采音脚本", newTask: "+ 新建任务", taskAndSpeaker: "任务与发音人", taskName: "任务名称", speakerName: "发音人姓名", gender: "性别", female: "女", male: "男", other: "其他", age: "年龄", importScript: "导入 TXT 脚本", openDataDirectory: "打开数据目录", deleteTask: "删除当前任务", currentTake: "当前录音", ready: "待命", prompt: "提示词", readingText: "朗读文本", fontSize: "字号", previous: "上一句", next: "下一句", startRecording: "开始录制", stopRecording: "停止录制", play: "播放", completeTask: "完成任务", recordingSavedAsWav: "电脑端录音会保存为 WAV。", syncRecording: "多设备同步录音", syncSubtitle: "电脑可创建主控房间，或加入手机/电脑主控房间", deviceName: "设备名称", hostIp: "主控 IP", port: "端口", roomCode: "房间口令", hostRoom: "创建主控房间", joinRoom: "加入已有房间", enterSync: "进入同步录制", closeSync: "关闭同步", desktopSettings: "电脑录音配置", settingsSubtitle: "与手机端一致的 WAV 参数和目录结构", sampleRate: "采样率", channels: "声道", mono: "单声道", stereo: "双声道", bitDepth: "位深", microphone: "麦克风", loadingMicrophones: "正在读取麦克风…", leadingSilence: "首端静音（毫秒）", trailingSilence: "尾端静音（毫秒）", recordingPath: "数据保存路径", choose: "选择", settingsDescription: "修改配置后，新录制的 WAV 将使用新的采样率、声道与位深。", editSettings: "修改配置", saveSettings: "保存配置", noScript: "尚未导入脚本", importToShowPrompt: "导入脚本后显示提示词", importToShowReading: "请先导入 TXT 脚本", noPrompt: "无提示词", recorded: "已录", pending: "未录", sentence: "句", script: "脚本", continueRecording: "继续录制", singleWaiting: "单机录音 · 等待同步", hostRoomStatus: "主控房间", connectedHost: "已连接主控", clients: "台客户端", hostInfoIdle: "创建房间后显示本机 IP、端口与口令。", hostAddress: "主控地址", connectedToHost: "已连接主控", passcode: "口令", states: { ready: "待命", leading: "首端静音", recording: "正在录制", trailing: "尾端静音", saving: "正在保存", saved: "已保存", playing: "正在播放", complete: "任务已完成", error: "录制异常" }, unnamedTask: "未命名任务", unnamedSpeaker: "未命名" },
@@ -15,6 +15,8 @@ const TRANSLATIONS = {
 };
 Object.assign(TRANSLATIONS.zh, { scanToJoin: "手机扫码加入", scanToJoinHint: "使用手机端“加入已有房间”的扫码按钮，地址、端口和口令会自动填入。" });
 Object.assign(TRANSLATIONS.en, { scanToJoin: "Scan to join on phone", scanToJoinHint: "Use the scanner in the phone app's Join Room. Host IP, port and code will be filled automatically." });
+Object.assign(TRANSLATIONS.zh, { removeDevice: "移除", singleChannel: "单通道", multiChannel: "多通道", microphones: "麦克风（可多选）", microphoneHelp: "按点击顺序选择。多通道：一麦克风一通道；单通道：混合所有已选麦克风。", noMicrophones: "未发现可用麦克风" });
+Object.assign(TRANSLATIONS.en, { removeDevice: "Remove", singleChannel: "Single channel", multiChannel: "Multi-channel", microphones: "Microphones (multi-select)", microphoneHelp: "Choose in click order. Multi-channel: one microphone per channel; single channel: mix all selected microphones.", noMicrophones: "No microphone available" });
 
 function cleanText(value) { return String(value ?? "").trim(); }
 function t(key, values = {}) {
@@ -89,8 +91,28 @@ function setSettingsEditMode(editing) {
   state.editingSettings = editing;
   settingsFields.forEach((key) => { elements[key].disabled = !editing; });
   elements.choosePathButton.disabled = !editing;
+  renderMicrophonePicker();
   elements.settingsActionButton.textContent = editing ? t("saveSettings") : t("editSettings");
   elements.settingsActionButton.classList.toggle("primary", true);
+}
+
+function microphonePlan() { return window.DesktopMultiMicrophone.resolveMicrophoneRecordingPlan({ channelMode: elements.channels.value, microphoneIds: state.selectedMicrophoneIds }); }
+
+function renderMicrophonePicker() {
+  const fragment = document.createDocumentFragment();
+  if (!state.microphoneDevices.length) {
+    const empty = document.createElement("small"); empty.className = "microphone-empty"; empty.textContent = t("noMicrophones"); fragment.append(empty);
+  } else state.microphoneDevices.forEach((device, index) => {
+    const selectedIndex = state.selectedMicrophoneIds.indexOf(device.deviceId);
+    const button = document.createElement("button"); button.type = "button"; button.className = `microphone-option${selectedIndex >= 0 ? " selected" : ""}`; button.disabled = !state.editingSettings; button.setAttribute("aria-pressed", String(selectedIndex >= 0));
+    if (selectedIndex >= 0) { const order = document.createElement("span"); order.className = "microphone-order"; order.textContent = String(selectedIndex + 1); button.append(order); }
+    const name = document.createElement("span"); name.className = "microphone-name"; name.textContent = device.label || `${t("microphones")} ${index + 1}`; button.append(name);
+    button.onclick = () => { const selected = state.selectedMicrophoneIds.includes(device.deviceId); state.selectedMicrophoneIds = selected ? state.selectedMicrophoneIds.filter((id) => id !== device.deviceId) : [...state.selectedMicrophoneIds, device.deviceId]; renderMicrophonePicker(); };
+    fragment.append(button);
+  });
+  elements.microphoneList.replaceChildren(fragment);
+  const plan = microphonePlan();
+  elements.microphoneHelp.textContent = plan.mixesInputs ? `${t("microphoneHelp")} ${state.selectedMicrophoneIds.length} → 1` : plan.isMultiChannel ? `${t("microphoneHelp")} ${state.selectedMicrophoneIds.length} → ${plan.channelCount}` : t("microphoneHelp");
 }
 
 function applyUiPreferences() {
@@ -219,17 +241,22 @@ function renderSync() {
   const devices = state.sync.devices || [];
   const clientLocked = state.sync.mode === "client";
   const onlineClients = devices.filter((device) => device.role === "client" && device.detail !== "offline");
+  const controls = window.DesktopTaskAccess.resolveSyncControlState({ mode: state.sync.mode, recordingActive: state.syncRecordingActive, onlineClientCount: onlineClients.length });
   elements.syncSummary.textContent = state.sync.mode === "idle" ? t("singleWaiting") : `${state.sync.mode === "host" ? t("hostRoomStatus") : t("connectedHost")} · ${onlineClients.length} ${t("clients")}`;
   elements.hostInfo.textContent = state.sync.mode === "host" ? `${t("hostAddress")}: ${state.sync.address}　${t("port")}: 35679　${t("passcode")}: ${state.sync.roomCode}` : state.sync.mode === "client" ? `${t("connectedToHost")}: ${state.sync.address}　${t("passcode")}: ${state.sync.roomCode}` : t("hostInfoIdle");
   renderHostInvite();
-  elements.openSyncButton.disabled = state.sync.mode !== "host" || !onlineClients.length;
+  elements.hostButton.disabled = controls.hostDisabled;
+  elements.joinButton.disabled = controls.joinDisabled;
+  elements.openSyncButton.disabled = controls.enterDisabled;
+  elements.closeSyncButton.disabled = controls.closeDisabled;
+  [elements.deviceName, elements.hostIp, elements.hostPort, elements.roomCode].forEach((field) => { field.disabled = controls.inputsDisabled; });
   [elements.recordButton, elements.previousButton, elements.nextButton, elements.playButton, elements.completeButton].forEach((button) => { button.disabled = clientLocked; });
   const dots = document.createDocumentFragment();
   devices.forEach((device) => { const dot = document.createElement("button"); dot.className = `device-dot ${device.detail === "offline" ? "offline" : ["ready", "leading", "recording", "trailing", "saving"].includes(device.state) ? "online" : "waiting"}`; dot.textContent = (device.name || "?").slice(0, 1); dot.title = `${device.name} · ${device.detail === "offline" ? "离线" : device.state}`; dots.append(dot); });
   elements.deviceDots.replaceChildren(dots);
   elements.deviceDots.classList.toggle("empty", !devices.length);
   const rows = document.createDocumentFragment();
-  devices.forEach((device) => { const row = document.createElement("div"); row.className = "device-row"; const name = document.createElement("strong"); name.textContent = device.name; const status = document.createElement("span"); status.textContent = device.detail === "offline" ? "离线" : device.state; row.append(name, status); rows.append(row); });
+  devices.filter((device) => device.role === "client").forEach((device) => { const row = document.createElement("div"); row.className = "device-row"; const name = document.createElement("strong"); name.textContent = device.name; const status = document.createElement("span"); status.textContent = device.detail === "offline" ? "离线" : device.state; row.append(name, status); if (state.sync.mode === "host") { const remove = document.createElement("button"); remove.type = "button"; remove.className = "device-remove"; remove.textContent = t("removeDevice"); remove.onclick = async () => { try { state.sync = await bridge.sync.removeClient(device.id); setMessage(`${device.name} 已移出同步房间。`); render(); } catch (error) { setMessage(error.message, true); } }; row.append(remove); } rows.append(row); });
   elements.deviceList.replaceChildren(rows);
   renderSentenceList(clientLocked);
 }
@@ -283,8 +310,14 @@ function renderReadingText(sentence) {
 }
 
 async function listMicrophones() {
-  try { const temporary = await navigator.mediaDevices.getUserMedia({ audio: true }); temporary.getTracks().forEach((track) => track.stop()); const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "audioinput"); elements.microphone.replaceChildren(...inputs.map((device, index) => new Option(device.label || `${t("microphone")} ${index + 1}`, device.deviceId))); }
-  catch (error) { elements.microphone.replaceChildren(new Option("麦克风权限未授予", "")); setMessage(`无法读取麦克风：${error.message}`, true); }
+  try {
+    const temporary = await navigator.mediaDevices.getUserMedia({ audio: true }); temporary.getTracks().forEach((track) => track.stop());
+    state.microphoneDevices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "audioinput");
+    const available = new Set(state.microphoneDevices.map((device) => device.deviceId));
+    state.selectedMicrophoneIds = state.selectedMicrophoneIds.filter((id) => available.has(id));
+    if (!state.selectedMicrophoneIds.length && state.microphoneDevices[0]) state.selectedMicrophoneIds = [state.microphoneDevices[0].deviceId];
+    renderMicrophonePicker();
+  } catch (error) { state.microphoneDevices = []; renderMicrophonePicker(); setMessage(`无法读取麦克风：${error.message}`, true); }
 }
 
 const WAVE_SAMPLE_INTERVAL = 25;
@@ -368,11 +401,22 @@ function drawWave() {
 async function startRecording() {
   requireSentences(); if (state.audio) return;
   stopPlayback();
-  const settings = state.settings; const constraints = { audio: { deviceId: elements.microphone.value ? { exact: elements.microphone.value } : undefined, channelCount: settings.channels, sampleRate: settings.sampleRate, echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
-  state.mediaStream = await navigator.mediaDevices.getUserMedia(constraints); const audio = new AudioContext({ sampleRate: settings.sampleRate }); const source = audio.createMediaStreamSource(state.mediaStream); const analyser = audio.createAnalyser(); const processor = audio.createScriptProcessor(4096, settings.channels, settings.channels); const silence = audio.createGain(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = .75; silence.gain.value = 0;
-  state.audio = audio; state.analyser = analyser; state.chunks = Array.from({ length: settings.channels }, () => []); state.wave = [];
-  processor.onaudioprocess = (event) => { for (let channel = 0; channel < settings.channels; channel += 1) state.chunks[channel].push(new Float32Array(event.inputBuffer.getChannelData(Math.min(channel, event.inputBuffer.numberOfChannels - 1)))); };
-  source.connect(analyser); source.connect(processor); processor.connect(silence); silence.connect(audio.destination); state.audioNode = { source, analyser, processor, silence }; startRealtimeWaveform(); scheduleWaveDraw();
+  const settings = state.settings; const plan = microphonePlan();
+  if (!plan.microphoneIds.length) throw new Error("请先选择至少一个麦克风。");
+  const streams = [];
+  try { for (const deviceId of plan.microphoneIds) streams.push(await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId }, channelCount: { ideal: 1 }, sampleRate: { ideal: settings.sampleRate }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } })); }
+  catch (error) { streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); throw error; }
+  const audio = new AudioContext({ sampleRate: settings.sampleRate }); const sources = []; const splitters = [];
+  try {
+    streams.forEach((stream) => { const source = audio.createMediaStreamSource(stream); const splitter = audio.createChannelSplitter(1); source.connect(splitter); sources.push(source); splitters.push(splitter); });
+    let captureNode;
+    if (plan.isMultiChannel) { const merger = audio.createChannelMerger(plan.channelCount); splitters.forEach((splitter, index) => splitter.connect(merger, 0, index)); captureNode = merger; }
+    else { const mixer = audio.createGain(); mixer.gain.value = 1 / splitters.length; splitters.forEach((splitter) => splitter.connect(mixer, 0, 0)); captureNode = mixer; }
+    const analyser = audio.createAnalyser(); const processor = audio.createScriptProcessor(4096, plan.channelCount, 1); const silence = audio.createGain(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = .75; silence.gain.value = 0;
+    state.audio = audio; state.analyser = analyser; state.mediaStreams = streams; state.recordingChannels = plan.channelCount; state.chunks = Array.from({ length: plan.channelCount }, () => []); state.wave = [];
+    processor.onaudioprocess = (event) => { for (let channel = 0; channel < state.recordingChannels; channel += 1) state.chunks[channel].push(new Float32Array(event.inputBuffer.getChannelData(Math.min(channel, event.inputBuffer.numberOfChannels - 1)))); };
+    captureNode.connect(analyser); captureNode.connect(processor); processor.connect(silence); silence.connect(audio.destination); state.audioNode = { sources, splitters, captureNode, analyser, processor, silence }; startRealtimeWaveform(); scheduleWaveDraw();
+  } catch (error) { sources.forEach((source) => source.disconnect()); splitters.forEach((splitter) => splitter.disconnect()); streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); await audio.close(); throw error; }
   elements.recordButton.textContent = t("stopRecording"); setRecordPhase(settings.leadingSilenceMs ? "leading" : "recording", settings.leadingSilenceMs); await bridge.sync.state({ state: settings.leadingSilenceMs ? "leading" : "recording", sentenceIndex: state.currentIndex });
   if (settings.leadingSilenceMs) state.leadingTimer = setTimeout(() => { if (state.audio) { setRecordPhase("recording"); bridge.sync.state({ state: "recording", sentenceIndex: state.currentIndex }); } }, settings.leadingSilenceMs);
 }
@@ -383,8 +427,8 @@ function bytesToBase64(bytes) { let binary = ""; const size = 0x8000; for (let o
 
 async function stopRecording() {
   if (!state.audio) return; const settings = state.settings; if (state.leadingTimer) clearTimeout(state.leadingTimer); state.leadingTimer = null; setRecordPhase(settings.trailingSilenceMs ? "trailing" : "saving", settings.trailingSilenceMs); await bridge.sync.state({ state: settings.trailingSilenceMs ? "trailing" : "saving", sentenceIndex: state.currentIndex }); if (settings.trailingSilenceMs) await new Promise((resolve) => setTimeout(resolve, settings.trailingSilenceMs)); setRecordPhase("saving");
-  const audio = state.audio; const { source, analyser, processor, silence } = state.audioNode; stopRealtimeWaveform(); source.disconnect(); analyser.disconnect(); processor.disconnect(); silence.disconnect(); state.mediaStream.getTracks().forEach((track) => track.stop()); await audio.close(); state.audio = null; state.analyser = null; state.audioNode = null; scheduleWaveDraw();
-  const sentence = currentSentence(); const bytes = encodeWav(state.chunks, settings.channels, audio.sampleRate, settings.bitDepth); const result = await bridge.saveRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: sentence.index, base64: bytesToBase64(bytes) }); state.recorded.set(state.currentIndex, result.path); await persistTaskWorkspace(); elements.recordButton.textContent = t("startRecording"); setRecordPhase("saved"); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex });
+  const audio = state.audio; const { sources, splitters, captureNode, analyser, processor, silence } = state.audioNode; const recordedChannels = state.recordingChannels; stopRealtimeWaveform(); sources.forEach((source) => source.disconnect()); splitters.forEach((splitter) => splitter.disconnect()); captureNode.disconnect(); analyser.disconnect(); processor.disconnect(); silence.disconnect(); state.mediaStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); await audio.close(); state.audio = null; state.analyser = null; state.audioNode = null; state.mediaStreams = []; scheduleWaveDraw();
+  const sentence = currentSentence(); const bytes = encodeWav(state.chunks, recordedChannels, audio.sampleRate, settings.bitDepth); const result = await bridge.saveRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: sentence.index, base64: bytesToBase64(bytes) }); state.recorded.set(state.currentIndex, result.path); await persistTaskWorkspace(); elements.recordButton.textContent = t("startRecording"); setRecordPhase("saved"); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex });
   const nextIndex = getAutoNext(state.currentIndex, state.sentences.length); if (nextIndex === undefined) setMessage(`已保存：${result.fileName}。全部句子已完成；选择目标句后再次录制即可覆盖旧文件。`); else { state.currentIndex = nextIndex; setMessage(`已保存：${result.fileName}。已自动跳到第 ${nextIndex + 1} 句。`); } render();
 }
 
@@ -422,11 +466,11 @@ function playFromWaveform(event) {
 }
 async function requestRecordToggle() { if (state.sync.mode === "client") return; if (state.sync.mode === "host") await bridge.sync.command(state.audio ? "stop" : "start", state.currentIndex); else if (state.audio) await stopRecording(); else await startRecording(); }
 async function requestJump(delta) { const target = Math.min(state.sentences.length - 1, Math.max(0, state.currentIndex + delta)); if (target === state.currentIndex || state.sync.mode === "client") return; if (state.sync.mode === "host") await bridge.sync.command(delta < 0 ? "previous" : "next", target); else await jumpTo(target); }
-async function enterSyncRecording() { if (state.sync.mode !== "host") return; await bridge.sync.command("open", state.currentIndex); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex }); setMessage("已通知所有在线设备进入同步录制。"); }
+async function enterSyncRecording() { if (state.sync.mode !== "host" || state.syncRecordingActive) return; await bridge.sync.command("open", state.currentIndex); state.syncRecordingActive = true; await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex }); setMessage("已通知所有在线设备进入同步录制。"); render(); }
 function schedule(command, callback) { const rawDelay = Number(command.executeAt || Date.now()) - Date.now(); setTimeout(callback, rawDelay > 0 && rawDelay <= 2_000 ? rawDelay : 0); }
 function remoteSentenceIndex(value) { const index = Number(value); return Number.isInteger(index) ? Math.min(state.sentences.length - 1, Math.max(0, index)) : state.currentIndex; }
 function applyRemoteSentence(command, message) { state.currentIndex = remoteSentenceIndex(command.sentenceIndex); setMessage(message); bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex }); render(); }
-async function handleCommand(command) { if (command.name === "open") return schedule(command, () => applyRemoteSentence(command, "主控已进入同步录制。")); if (command.name === "start") return schedule(command, () => startRecording().catch((error) => setMessage(error.message, true))); if (command.name === "stop") return schedule(command, () => stopRecording().catch((error) => setMessage(error.message, true))); if (command.name === "cancel") return schedule(command, () => { if (state.audio) stopRecording().catch((error) => setMessage(error.message, true)); else { setRecordPhase("ready"); bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex }); } }); if (command.name === "previous" || command.name === "next" || command.name === "jump" || command.name === "rerecord") return schedule(command, () => applyRemoteSentence(command, `主控已跳转到第 ${remoteSentenceIndex(command.sentenceIndex) + 1} 句。`)); if (command.name === "play") return schedule(command, () => playCurrent().catch((error) => setMessage(error.message, true))); if (command.name === "complete") return schedule(command, () => completeCurrentTask("主控已完成同步任务，当前录音已保留。点击左侧任务模块可继续查看或重录。").catch((error) => setMessage(error.message, true))); }
+async function handleCommand(command) { if (command.name === "open") { state.syncRecordingActive = true; render(); return schedule(command, () => applyRemoteSentence(command, "主控已进入同步录制。")); } if (command.name === "start") return schedule(command, () => startRecording().catch((error) => setMessage(error.message, true))); if (command.name === "stop") return schedule(command, () => stopRecording().catch((error) => setMessage(error.message, true))); if (command.name === "cancel") return schedule(command, () => { if (state.audio) stopRecording().catch((error) => setMessage(error.message, true)); else { setRecordPhase("ready"); bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex }); } }); if (command.name === "previous" || command.name === "next" || command.name === "jump" || command.name === "rerecord") return schedule(command, () => applyRemoteSentence(command, `主控已跳转到第 ${remoteSentenceIndex(command.sentenceIndex) + 1} 句。`)); if (command.name === "play") return schedule(command, () => playCurrent().catch((error) => setMessage(error.message, true))); if (command.name === "complete") return schedule(command, () => completeCurrentTask("主控已完成同步任务，当前录音已保留。点击左侧任务模块可继续查看或重录。").catch((error) => setMessage(error.message, true))); }
 
 async function completeCurrentTask(message = "任务已完成。点击左侧任务与发音人模块可继续查看或重录。") {
   if (state.audio) await stopRecording();
@@ -442,6 +486,7 @@ async function resetCurrentTask({ resetIdentity }) {
   if (state.audio) throw new Error("请先停止当前录制，再新建或删除任务。");
   stopPlayback();
   if (state.sync.mode !== "idle") state.sync = await bridge.sync.stop();
+  state.syncRecordingActive = false;
   state.sentences = []; state.currentIndex = 0; state.scriptName = ""; state.recorded.clear(); state.wave = []; state.currentTaskId = createTaskId();
   if (resetIdentity) { elements.projectName.value = t("unnamedTask"); elements.speakerName.value = t("unnamedSpeaker"); elements.speakerGender.value = "其他"; elements.speakerAge.value = "0"; }
   setRecordPhase("ready"); render();
@@ -454,16 +499,17 @@ async function resetCurrentTask({ resetIdentity }) {
 elements.importScriptButton.onclick = async () => { try { if (taskLocked()) throw new Error("任务已有录音，不能更换脚本。请新建任务，或先删除当前任务。 "); const file = await bridge.openScript(); if (!file) return; state.sentences = parseScript(file.content); state.scriptName = file.name; state.currentIndex = 0; state.recorded.clear(); await hydrateRecordedState({ persist: false }); await persistTaskWorkspace(); setMessage(`已导入 ${state.sentences.length} 句脚本。`); render(); } catch (error) { setMessage(error.message, true); } };
 elements.newTaskButton.onclick = async () => { try { if (!window.confirm("新建任务会关闭当前同步会话。当前任务会保留为可展开模块，已保存 WAV 文件不会删除。是否继续？")) return; const previous = captureCurrentTask(); if (taskHasContent(previous)) state.taskArchive.push(previous); await resetCurrentTask({ resetIdentity: true }); setFold(elements.currentTaskCard, false); await persistTaskWorkspace(); setMessage("已新建空任务，现在可以立即填写任务与发音人信息，再导入 TXT 脚本。"); } catch (error) { setMessage(error.message, true); } };
 elements.deleteTaskButton.onclick = async () => { try { const project = currentProject(); if (!window.confirm(`确定删除桌面任务“${project.name}”吗？该任务已管理的 WAV 文件会一并删除，此操作不可恢复。`)) return; const result = await bridge.deleteTask({ project }); await resetCurrentTask({ resetIdentity: true }); await persistTaskWorkspace(); setMessage(`已删除任务及 ${result.deletedCount} 条桌面 WAV 记录。`); } catch (error) { setMessage(error.message, true); } };
-elements.settingsActionButton.onclick = async () => { try { if (!state.editingSettings) { setSettingsEditMode(true); setMessage("现在可以修改电脑录音配置。修改后请保存。"); return; } state.settings = await bridge.saveSettings({ sampleRate: Number(elements.sampleRate.value), channels: Number(elements.channels.value), bitDepth: Number(elements.bitDepth.value), leadingSilenceMs: Number(elements.leadingSilenceMs.value), trailingSilenceMs: Number(elements.trailingSilenceMs.value), recordingRoot: elements.recordingRoot.value }); setSettingsEditMode(false); setMessage("电脑录音配置已保存。新录制将使用此配置。"); } catch (error) { setMessage(error.message, true); } };
+elements.settingsActionButton.onclick = async () => { try { if (!state.editingSettings) { setSettingsEditMode(true); setMessage("现在可以修改电脑录音配置。修改后请保存。"); return; } state.settings = await bridge.saveSettings({ sampleRate: Number(elements.sampleRate.value), channelMode: elements.channels.value, microphoneIds: state.selectedMicrophoneIds, bitDepth: Number(elements.bitDepth.value), leadingSilenceMs: Number(elements.leadingSilenceMs.value), trailingSilenceMs: Number(elements.trailingSilenceMs.value), recordingRoot: elements.recordingRoot.value }); state.selectedMicrophoneIds = state.settings.microphoneIds || []; setSettingsEditMode(false); setMessage("电脑录音配置已保存。新录制将使用此配置。"); } catch (error) { setMessage(error.message, true); } };
 elements.choosePathButton.onclick = async () => { const directory = await bridge.chooseDirectory(); if (directory) elements.recordingRoot.value = directory; };
 elements.openTaskDirectoryButton.onclick = async () => { try { const result = await bridge.openTaskDirectory({ project: currentProject(), speaker: currentSpeaker() }); setMessage(`已打开数据目录：${result.directory}`); } catch (error) { setMessage(error.message, true); } };
 elements.waveCanvas.addEventListener("click", playFromWaveform);
 elements.recordButton.onclick = () => requestRecordToggle().catch((error) => setMessage(error.message, true)); elements.previousButton.onclick = () => requestJump(-1).catch((error) => setMessage(error.message, true)); elements.nextButton.onclick = () => requestJump(1).catch((error) => setMessage(error.message, true)); elements.playButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("play", state.currentIndex); else playCurrent().catch((error) => setMessage(error.message, true)); }; elements.completeButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("complete", state.currentIndex); else completeCurrentTask().catch((error) => setMessage(error.message, true)); };
-elements.hostButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.host({ projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); elements.roomCode.value = state.sync.roomCode; render(); } catch (error) { setMessage(error.message, true); } }; elements.joinButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.join({ host: elements.hostIp.value.trim(), port: Number(elements.hostPort.value), roomCode: elements.roomCode.value, projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); render(); } catch (error) { setMessage(error.message, true); } }; elements.closeSyncButton.onclick = async () => { state.sync = await bridge.sync.stop(); render(); }; elements.openSyncButton.onclick = enterSyncRecording;
+elements.hostButton.onclick = async () => { try { requireSentences(); state.syncRecordingActive = false; state.sync = await bridge.sync.host({ projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); elements.roomCode.value = state.sync.roomCode; render(); } catch (error) { setMessage(error.message, true); } }; elements.joinButton.onclick = async () => { try { requireSentences(); state.syncRecordingActive = false; state.sync = await bridge.sync.join({ host: elements.hostIp.value.trim(), port: Number(elements.hostPort.value), roomCode: elements.roomCode.value, projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); render(); } catch (error) { setMessage(error.message, true); } }; elements.closeSyncButton.onclick = async () => { state.sync = await bridge.sync.stop(); state.syncRecordingActive = false; render(); }; elements.openSyncButton.onclick = enterSyncRecording;
 document.querySelectorAll(".fold-card").forEach((card) => card.querySelector(".fold-trigger").onclick = () => setFold(card, !card.classList.contains("folded")));
 taskIdentityFields.forEach((field) => { elements[field].oninput = () => { if (!taskEditState().disabled) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; });
 elements.readingFontSize.oninput = () => { state.ui.readingFontSize = clamp(elements.readingFontSize.value, 15, 50); applyUiPreferences(); };
 elements.readingFontSize.onchange = () => { persistUiPreferences().catch((error) => setMessage(error.message, true)); };
+elements.channels.onchange = () => renderMicrophonePicker();
 document.querySelectorAll("[data-resize-panel]").forEach((handle) => handle.addEventListener("pointerdown", beginPanelResize));
 elements.sidebarResizeHandle.addEventListener("pointerdown", beginSidebarResize);
 window.addEventListener("pointermove", movePanelResize);
@@ -471,7 +517,7 @@ window.addEventListener("pointerup", endPanelResize);
 window.addEventListener("pointermove", moveSidebarResize);
 window.addEventListener("pointerup", endSidebarResize);
 elements.projectName.onchange = () => { if (!taskEditState().disabled) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerName.onchange = () => { if (!taskEditState().disabled) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerGender.onchange = () => { if (!taskEditState().disabled) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; elements.speakerAge.onchange = () => { if (!taskEditState().disabled) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); };
-bridge.sync.onEvent((event) => { state.sync = event.session || state.sync; if (event.type === "command" && event.payload) handleCommand(event.payload); render(); });
+bridge.sync.onEvent((event) => { state.sync = event.session || state.sync; if (state.sync.mode === "idle") state.syncRecordingActive = false; if (event.type === "command" && event.payload) handleCommand(event.payload); render(); });
 bridge.onLanguage((language) => { state.ui.language = language === "en" ? "en" : "zh"; applyLanguage(); if (state.settings) persistUiPreferences().catch((error) => setMessage(error.message, true)); });
 window.addEventListener("resize", scheduleWaveDraw);
-(async () => { state.settings = await bridge.getSettings(); state.ui = normalizeUiPreferences(state.settings.ui); for (const key of ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"]) elements[key].value = state.settings[key]; const workspace = await bridge.getTaskWorkspace(); state.taskArchive = (workspace.archive || []).map((task) => ({ ...task, recorded: new Map(task.recorded || []) })); if (workspace.current) restoreTask({ ...workspace.current, recorded: new Map(workspace.current.recorded || []) }); else await resetCurrentTask({ resetIdentity: true }); elements.deviceName.value = await bridge.getDeviceName(); state.sync = await bridge.sync.status(); await listMicrophones(); setSettingsEditMode(false); applyUiPreferences(); applyStaticTranslations(); await hydrateRecordedState({ persist: true }); render(); })().catch((error) => setMessage(error.message, true));
+(async () => { state.settings = await bridge.getSettings(); state.ui = normalizeUiPreferences(state.settings.ui); for (const key of ["sampleRate", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"]) elements[key].value = state.settings[key]; elements.channels.value = state.settings.channelMode === "multi" ? "multi" : "single"; state.selectedMicrophoneIds = state.settings.microphoneIds || []; const workspace = await bridge.getTaskWorkspace(); state.taskArchive = (workspace.archive || []).map((task) => ({ ...task, recorded: new Map(task.recorded || []) })); if (workspace.current) restoreTask({ ...workspace.current, recorded: new Map(workspace.current.recorded || []) }); else await resetCurrentTask({ resetIdentity: true }); elements.deviceName.value = await bridge.getDeviceName(); state.sync = await bridge.sync.status(); await listMicrophones(); setSettingsEditMode(false); applyUiPreferences(); applyStaticTranslations(); await hydrateRecordedState({ persist: true }); render(); })().catch((error) => setMessage(error.message, true));

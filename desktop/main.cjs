@@ -12,15 +12,15 @@ const { createDesktopSyncRoomInvite } = require("./core/sync-invite.cjs");
 const { collectTaskOutputs } = require("./core/task-recordings.cjs");
 const { normalizeTaskWorkspace } = require("./core/task-workspace.cjs");
 const { DEFAULT_DESKTOP_UI, normalizeDesktopUiPreferences } = require("./core/ui-preferences.cjs");
+const { normalizeMicrophoneIds, resolveMicrophoneRecordingPlan } = require("./renderer/multi-microphone.js");
 
 let mainWindow = null;
 let syncRoom = null;
-let desktopState = { settings: { sampleRate: 48000, bitDepth: 16, channels: 1, leadingSilenceMs: 500, trailingSilenceMs: 500, recordingRoot: path.join(os.homedir(), "Documents"), ui: DEFAULT_DESKTOP_UI }, outputs: {}, taskWorkspace: { current: undefined, archive: [] } };
+let desktopState = { settings: { sampleRate: 48000, bitDepth: 16, channelMode: "single", channels: 1, microphoneIds: [], leadingSilenceMs: 500, trailingSilenceMs: 500, recordingRoot: path.join(os.homedir(), "Documents"), ui: DEFAULT_DESKTOP_UI }, outputs: {}, taskWorkspace: { current: undefined, archive: [] } };
 
 const statePath = () => path.join(app.getPath("userData"), "desktop-state.json");
 const safeError = (error) => error instanceof Error ? error.message : "发生未知错误。";
 const allowedBitDepth = new Set([16, 32]);
-const allowedChannels = new Set([1, 2]);
 const allowedSampleRates = new Set([16000, 22050, 24000, 44100, 48000]);
 
 async function loadState() {
@@ -29,7 +29,7 @@ async function loadState() {
     desktopState = {
       ...desktopState,
       ...saved,
-      settings: { ...desktopState.settings, ...(saved.settings || {}), ui: normalizeDesktopUiPreferences(saved.settings?.ui) },
+      settings: validateSettings({ ...desktopState.settings, ...(saved.settings || {}), ui: normalizeDesktopUiPreferences(saved.settings?.ui) }),
       outputs: saved.outputs && typeof saved.outputs === "object" ? saved.outputs : {},
       taskWorkspace: normalizeTaskWorkspace(saved.taskWorkspace),
     };
@@ -46,10 +46,11 @@ function validateSettings(input) {
   const next = { ...desktopState.settings, ...input };
   if (!allowedSampleRates.has(Number(next.sampleRate))) throw new Error("采样率无效。");
   if (!allowedBitDepth.has(Number(next.bitDepth))) throw new Error("位深仅支持 16-bit 或 32-bit。");
-  if (!allowedChannels.has(Number(next.channels))) throw new Error("声道仅支持单声道或双声道。");
+  const microphoneIds = normalizeMicrophoneIds(next.microphoneIds?.length ? next.microphoneIds : next.microphone);
+  const channelPlan = resolveMicrophoneRecordingPlan({ channelMode: next.channelMode, microphoneIds });
   for (const key of ["leadingSilenceMs", "trailingSilenceMs"]) if (!Number.isInteger(Number(next[key])) || Number(next[key]) < 0 || Number(next[key]) > 10000) throw new Error("首尾静音必须是 0 到 10000 毫秒之间的整数。");
   if (typeof next.recordingRoot !== "string" || !path.isAbsolute(next.recordingRoot)) throw new Error("请选择有效的数据保存路径。");
-  return { ...next, sampleRate: Number(next.sampleRate), bitDepth: Number(next.bitDepth), channels: Number(next.channels), leadingSilenceMs: Number(next.leadingSilenceMs), trailingSilenceMs: Number(next.trailingSilenceMs), ui: normalizeDesktopUiPreferences(next.ui) };
+  return { ...next, sampleRate: Number(next.sampleRate), bitDepth: Number(next.bitDepth), channelMode: channelPlan.channelMode, channels: channelPlan.channelCount, microphoneIds: channelPlan.microphoneIds, leadingSilenceMs: Number(next.leadingSilenceMs), trailingSilenceMs: Number(next.trailingSilenceMs), ui: normalizeDesktopUiPreferences(next.ui) };
 }
 
 function outputKey(project, speaker, sentenceIndex) { return `${project.name}\u241E${speaker.name}\u241E${sentenceIndex}`; }
@@ -174,6 +175,7 @@ ipcMain.handle("sync:host", async (_event, input) => syncRoom.host(input));
 ipcMain.handle("sync:join", async (_event, input) => syncRoom.join(input));
 ipcMain.handle("sync:stop", async () => { await syncRoom.stop(); return syncRoom.snapshot(); });
 ipcMain.handle("sync:status", () => syncRoom.snapshot());
+ipcMain.handle("sync:remove-client", async (_event, deviceId) => syncRoom.removeClient(deviceId));
 ipcMain.handle("sync:host-invite", async () => {
   const payload = createDesktopSyncRoomInvite(syncRoom.snapshot());
   const qrDataUrl = await QRCode.toDataURL(payload, {

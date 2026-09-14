@@ -81,9 +81,9 @@
             <div class="fold-content">
               <div class="settings-grid">
                 <label><span data-i18n="sampleRate">采样率</span><select id="sampleRate"><option value="16000">16 kHz</option><option value="22050">22.05 kHz</option><option value="24000">24 kHz</option><option value="44100">44.1 kHz</option><option value="48000" selected>48 kHz</option></select></label>
-                <label><span data-i18n="channels">声道</span><select id="channels"><option value="1" data-i18n="mono">单声道</option><option value="2" data-i18n="stereo">双声道</option></select></label>
+                <label><span data-i18n="channels">声道</span><select id="channels"><option value="single" data-i18n="singleChannel">单通道</option><option value="multi" data-i18n="multiChannel">多通道</option></select></label>
                 <label><span data-i18n="bitDepth">位深</span><select id="bitDepth"><option value="16">16-bit</option><option value="32">32-bit</option></select></label>
-                <label><span data-i18n="microphone">麦克风</span><select id="microphone"><option value="" data-i18n="loadingMicrophones">正在读取麦克风…</option></select></label>
+                <label class="microphone-field"><span data-i18n="microphones">麦克风（可多选）</span><div id="microphoneList" class="microphone-list" aria-label="麦克风列表"></div><small id="microphoneHelp" class="microphone-help">按点击顺序选择麦克风。</small></label>
                 <label><span data-i18n="leadingSilence">首端静音（毫秒）</span><input id="leadingSilenceMs" type="number" min="0" max="10000" /></label>
                 <label><span data-i18n="trailingSilence">尾端静音（毫秒）</span><input id="trailingSilenceMs" type="number" min="0" max="10000" /></label>
                 <label class="path-field"><span data-i18n="recordingPath">数据保存路径</span><div class="path-picker"><input id="recordingRoot" readonly /><button id="choosePathButton" class="button secondary compact" type="button" data-i18n="choose">选择</button></div></label>
@@ -95,6 +95,7 @@
       </section>
     </main>
     <script src="./task-access.js"></script>
+    <script src="./multi-microphone.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

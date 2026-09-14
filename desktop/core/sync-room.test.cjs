@@ -67,3 +67,19 @@ test("桌面端连续创建主控房间会串行释放旧监听端口", async ()
     await room.stop();
   }
 });
+
+test("桌面主控可移除指定客户端，客户端立即退出同步房间", async () => {
+  const host = new SyncRoom(() => {});
+  const client = new SyncRoom(() => {});
+  try {
+    const hosted = await host.host({ projectId: "desktop|2|10", sentenceCount: 2, deviceName: "Windows 主控" });
+    await client.join({ host: "127.0.0.1", port: 35679, roomCode: hosted.roomCode, projectId: "phone|2|99", sentenceCount: 2, deviceName: "Android 录音设备" });
+    const clientDevice = host.snapshot().devices.find((device) => device.role === "client");
+    const snapshot = await host.removeClient(clientDevice.id);
+    assert.equal(snapshot.devices.some((device) => device.id === clientDevice.id), false);
+    await waitFor(() => client.snapshot().mode === "idle");
+  } finally {
+    await client.stop();
+    await host.stop();
+  }
+});

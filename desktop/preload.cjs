@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     join: (input) => ipcRenderer.invoke("sync:join", input),
     stop: () => ipcRenderer.invoke("sync:stop"),
     status: () => ipcRenderer.invoke("sync:status"),
+    removeClient: (deviceId) => ipcRenderer.invoke("sync:remove-client", deviceId),
     getHostInvite: () => ipcRenderer.invoke("sync:host-invite"),
     command: (name, sentenceIndex) => ipcRenderer.invoke("sync:command", name, sentenceIndex),
     state: (value) => ipcRenderer.invoke("sync:state", value),
