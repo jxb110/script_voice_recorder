@@ -22,3 +22,10 @@ test("多通道模式只选择一个麦克风时仍录制为单通道", () => {
   assert.equal(plan.channelCount, 1);
   assert.equal(plan.isMultiChannel, false);
 });
+
+test("未展开选择麦克风时使用系统默认麦克风录制为单通道", () => {
+  const plan = resolveMicrophoneRecordingPlan({ channelMode: "single", microphoneIds: [] });
+  assert.deepEqual(plan.microphoneIds, []);
+  assert.equal(plan.channelCount, 1);
+  assert.equal(plan.isMultiChannel, false);
+});

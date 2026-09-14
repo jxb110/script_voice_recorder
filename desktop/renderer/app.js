@@ -1,12 +1,12 @@
 const bridge = window.desktopBridge;
 const elementIds = [
-  "workspace", "sidebarResizeHandle", "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "hostInvite", "hostQrImage", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphoneList", "microphoneHelp", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
+  "workspace", "sidebarResizeHandle", "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "hostInvite", "hostQrImage", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphonePickerButton", "microphonePopover", "microphoneList", "microphoneHelp", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 const missingElement = elementIds.find((id) => !elements[id]);
 if (missingElement) throw new Error(`桌面录音界面缺少必要元素：${missingElement}`);
 
-const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, syncRecordingActive: false, audio: null, audioNode: null, analysers: [], mediaStreams: [], chunks: [], recordingChannels: 1, microphoneDevices: [], selectedMicrophoneIds: [], playing: null, playbackFrame: 0, playbackProgress: 0, recorded: new Map(), waveChannels: [[]], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, sidebarWidth: 340, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null, resizingSidebar: null };
+const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, syncRecordingActive: false, audio: null, audioNode: null, analysers: [], mediaStreams: [], chunks: [], recordingChannels: 1, microphoneDevices: [], selectedMicrophoneIds: [], microphonePickerOpen: false, playing: null, playbackFrame: 0, playbackProgress: 0, recorded: new Map(), waveChannels: [[]], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, sidebarWidth: 340, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null, resizingSidebar: null };
 const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"];
 const taskIdentityFields = ["projectName", "speakerName", "speakerGender", "speakerAge"];
 const TRANSLATIONS = {
@@ -15,8 +15,8 @@ const TRANSLATIONS = {
 };
 Object.assign(TRANSLATIONS.zh, { scanToJoin: "手机扫码加入", scanToJoinHint: "使用手机端“加入已有房间”的扫码按钮，地址、端口和口令会自动填入。" });
 Object.assign(TRANSLATIONS.en, { scanToJoin: "Scan to join on phone", scanToJoinHint: "Use the scanner in the phone app's Join Room. Host IP, port and code will be filled automatically." });
-Object.assign(TRANSLATIONS.zh, { removeDevice: "移除", singleChannel: "单通道", multiChannel: "多通道", microphones: "麦克风（可多选）", microphoneHelp: "按点击顺序选择。多通道：一麦克风一通道；单通道：混合所有已选麦克风。", noMicrophones: "未发现可用麦克风" });
-Object.assign(TRANSLATIONS.en, { removeDevice: "Remove", singleChannel: "Single channel", multiChannel: "Multi-channel", microphones: "Microphones (multi-select)", microphoneHelp: "Choose in click order. Multi-channel: one microphone per channel; single channel: mix all selected microphones.", noMicrophones: "No microphone available" });
+Object.assign(TRANSLATIONS.zh, { removeDevice: "移除", singleChannel: "单通道", multiChannel: "多通道", microphones: "麦克风", microphoneHelp: "默认使用系统默认麦克风；展开后可按点击顺序选择多个麦克风。", microphoneHelpSelected: "已选 {count} 个麦克风。多通道：一麦克风一通道；单通道：混合所有已选麦克风。", systemDefaultMicrophone: "系统默认麦克风", chooseMicrophones: "选择麦克风", noMicrophones: "未发现可用麦克风" });
+Object.assign(TRANSLATIONS.en, { removeDevice: "Remove", singleChannel: "Single channel", multiChannel: "Multi-channel", microphones: "Microphone", microphoneHelp: "Uses the system default microphone. Expand only when you need multiple microphones.", microphoneHelpSelected: "{count} selected. Multi-channel: one microphone per channel; single channel: mix all selected microphones.", systemDefaultMicrophone: "System default microphone", chooseMicrophones: "Choose microphones", noMicrophones: "No microphone available" });
 
 function cleanText(value) { return String(value ?? "").trim(); }
 function t(key, values = {}) {
@@ -111,8 +111,12 @@ function renderMicrophonePicker() {
     fragment.append(button);
   });
   elements.microphoneList.replaceChildren(fragment);
-  const plan = microphonePlan();
-  elements.microphoneHelp.textContent = plan.mixesInputs ? `${t("microphoneHelp")} ${state.selectedMicrophoneIds.length} → 1` : plan.isMultiChannel ? `${t("microphoneHelp")} ${state.selectedMicrophoneIds.length} → ${plan.channelCount}` : t("microphoneHelp");
+  const selectedNames = state.selectedMicrophoneIds.map((id) => state.microphoneDevices.find((device) => device.deviceId === id)?.label).filter(Boolean);
+  elements.microphonePickerButton.textContent = selectedNames.length ? selectedNames.length === 1 ? selectedNames[0] : `${t("chooseMicrophones")} · ${selectedNames.length}` : t("systemDefaultMicrophone");
+  elements.microphonePickerButton.disabled = !state.editingSettings;
+  elements.microphonePickerButton.setAttribute("aria-expanded", String(state.microphonePickerOpen && state.editingSettings));
+  elements.microphonePopover.hidden = !state.microphonePickerOpen || !state.editingSettings;
+  elements.microphoneHelp.textContent = selectedNames.length ? t("microphoneHelpSelected", { count: selectedNames.length }) : t("microphoneHelp");
 }
 
 function applyUiPreferences() {
@@ -315,7 +319,6 @@ async function listMicrophones() {
     state.microphoneDevices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "audioinput");
     const available = new Set(state.microphoneDevices.map((device) => device.deviceId));
     state.selectedMicrophoneIds = state.selectedMicrophoneIds.filter((id) => available.has(id));
-    if (!state.selectedMicrophoneIds.length && state.microphoneDevices[0]) state.selectedMicrophoneIds = [state.microphoneDevices[0].deviceId];
     renderMicrophonePicker();
   } catch (error) { state.microphoneDevices = []; renderMicrophonePicker(); setMessage(`无法读取麦克风：${error.message}`, true); }
 }
@@ -409,9 +412,9 @@ async function startRecording() {
   requireSentences(); if (state.audio) return;
   stopPlayback();
   const settings = state.settings; const plan = microphonePlan();
-  if (!plan.microphoneIds.length) throw new Error("请先选择至少一个麦克风。");
   const streams = [];
-  try { for (const deviceId of plan.microphoneIds) streams.push(await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId }, channelCount: { ideal: 1 }, sampleRate: { ideal: settings.sampleRate }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } })); }
+  const requestedMicrophones = plan.microphoneIds.length ? plan.microphoneIds : [undefined];
+  try { for (const deviceId of requestedMicrophones) streams.push(await navigator.mediaDevices.getUserMedia({ audio: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), channelCount: { ideal: 1 }, sampleRate: { ideal: settings.sampleRate }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } })); }
   catch (error) { streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); throw error; }
   const audio = new AudioContext({ sampleRate: settings.sampleRate }); const sources = []; const splitters = [];
   try {
@@ -518,6 +521,8 @@ taskIdentityFields.forEach((field) => { elements[field].oninput = () => { if (!t
 elements.readingFontSize.oninput = () => { state.ui.readingFontSize = clamp(elements.readingFontSize.value, 15, 50); applyUiPreferences(); };
 elements.readingFontSize.onchange = () => { persistUiPreferences().catch((error) => setMessage(error.message, true)); };
 elements.channels.onchange = () => renderMicrophonePicker();
+elements.microphonePickerButton.onclick = () => { if (!state.editingSettings) return; state.microphonePickerOpen = !state.microphonePickerOpen; renderMicrophonePicker(); };
+document.addEventListener("pointerdown", (event) => { if (!state.microphonePickerOpen || elements.microphonePopover.contains(event.target) || elements.microphonePickerButton.contains(event.target)) return; state.microphonePickerOpen = false; renderMicrophonePicker(); });
 document.querySelectorAll("[data-resize-panel]").forEach((handle) => handle.addEventListener("pointerdown", beginPanelResize));
 elements.sidebarResizeHandle.addEventListener("pointerdown", beginSidebarResize);
 window.addEventListener("pointermove", movePanelResize);
