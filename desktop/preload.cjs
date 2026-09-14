@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     join: (input) => ipcRenderer.invoke("sync:join", input),
     stop: () => ipcRenderer.invoke("sync:stop"),
     status: () => ipcRenderer.invoke("sync:status"),
+    getHostInvite: () => ipcRenderer.invoke("sync:host-invite"),
     command: (name, sentenceIndex) => ipcRenderer.invoke("sync:command", name, sentenceIndex),
     state: (value) => ipcRenderer.invoke("sync:state", value),
     onEvent: (listener) => { const callback = (_event, value) => listener(value); ipcRenderer.on("sync:event", callback); return () => ipcRenderer.removeListener("sync:event", callback); },

@@ -1,6 +1,6 @@
 const bridge = window.desktopBridge;
 const elementIds = [
-  "workspace", "sidebarResizeHandle", "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
+  "workspace", "sidebarResizeHandle", "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "hostInvite", "hostQrImage", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 const missingElement = elementIds.find((id) => !elements[id]);
@@ -13,6 +13,8 @@ const TRANSLATIONS = {
   zh: { appTitle: "采音脚本", newTask: "+ 新建任务", taskAndSpeaker: "任务与发音人", taskName: "任务名称", speakerName: "发音人姓名", gender: "性别", female: "女", male: "男", other: "其他", age: "年龄", importScript: "导入 TXT 脚本", openDataDirectory: "打开数据目录", deleteTask: "删除当前任务", currentTake: "当前录音", ready: "待命", prompt: "提示词", readingText: "朗读文本", fontSize: "字号", previous: "上一句", next: "下一句", startRecording: "开始录制", stopRecording: "停止录制", play: "播放", completeTask: "完成任务", recordingSavedAsWav: "电脑端录音会保存为 WAV。", syncRecording: "多设备同步录音", syncSubtitle: "电脑可创建主控房间，或加入手机/电脑主控房间", deviceName: "设备名称", hostIp: "主控 IP", port: "端口", roomCode: "房间口令", hostRoom: "创建主控房间", joinRoom: "加入已有房间", enterSync: "进入同步录制", closeSync: "关闭同步", desktopSettings: "电脑录音配置", settingsSubtitle: "与手机端一致的 WAV 参数和目录结构", sampleRate: "采样率", channels: "声道", mono: "单声道", stereo: "双声道", bitDepth: "位深", microphone: "麦克风", loadingMicrophones: "正在读取麦克风…", leadingSilence: "首端静音（毫秒）", trailingSilence: "尾端静音（毫秒）", recordingPath: "数据保存路径", choose: "选择", settingsDescription: "修改配置后，新录制的 WAV 将使用新的采样率、声道与位深。", editSettings: "修改配置", saveSettings: "保存配置", noScript: "尚未导入脚本", importToShowPrompt: "导入脚本后显示提示词", importToShowReading: "请先导入 TXT 脚本", noPrompt: "无提示词", recorded: "已录", pending: "未录", sentence: "句", script: "脚本", continueRecording: "继续录制", singleWaiting: "单机录音 · 等待同步", hostRoomStatus: "主控房间", connectedHost: "已连接主控", clients: "台客户端", hostInfoIdle: "创建房间后显示本机 IP、端口与口令。", hostAddress: "主控地址", connectedToHost: "已连接主控", passcode: "口令", states: { ready: "待命", leading: "首端静音", recording: "正在录制", trailing: "尾端静音", saving: "正在保存", saved: "已保存", playing: "正在播放", complete: "任务已完成", error: "录制异常" }, unnamedTask: "未命名任务", unnamedSpeaker: "未命名" },
   en: { appTitle: "Script Recorder", newTask: "+ New task", taskAndSpeaker: "Task & Speaker", taskName: "Task name", speakerName: "Speaker name", gender: "Gender", female: "Female", male: "Male", other: "Other", age: "Age", importScript: "Import TXT script", openDataDirectory: "Open data folder", deleteTask: "Delete task", currentTake: "CURRENT TAKE", ready: "Ready", prompt: "Prompt", readingText: "Reading text", fontSize: "Size", previous: "Previous", next: "Next", startRecording: "Start recording", stopRecording: "Stop recording", play: "Play", completeTask: "Complete task", recordingSavedAsWav: "Desktop recordings are saved as WAV.", syncRecording: "Multi-device sync recording", syncSubtitle: "Create a host room or join a phone/desktop host", deviceName: "Device name", hostIp: "Host IP", port: "Port", roomCode: "Room code", hostRoom: "Create host room", joinRoom: "Join room", enterSync: "Enter sync recording", closeSync: "Close sync", desktopSettings: "Desktop recording settings", settingsSubtitle: "WAV settings and directory structure matching mobile", sampleRate: "Sample rate", channels: "Channels", mono: "Mono", stereo: "Stereo", bitDepth: "Bit depth", microphone: "Microphone", loadingMicrophones: "Loading microphones…", leadingSilence: "Leading silence (ms)", trailingSilence: "Trailing silence (ms)", recordingPath: "Recording path", choose: "Choose", settingsDescription: "New WAV recordings use the saved sample rate, channels and bit depth.", editSettings: "Edit settings", saveSettings: "Save settings", noScript: "No script imported", importToShowPrompt: "Import a script to show its prompt", importToShowReading: "Import a TXT script first", noPrompt: "No prompt", recorded: "Recorded", pending: "Pending", sentence: "lines", script: "Script", continueRecording: "Continue", singleWaiting: "Single-device recording · waiting for sync", hostRoomStatus: "Host room", connectedHost: "Connected to host", clients: "clients", hostInfoIdle: "Create a room to show this device's IP, port and code.", hostAddress: "Host", connectedToHost: "Connected to host", passcode: "Code", states: { ready: "Ready", leading: "Leading silence", recording: "Recording", trailing: "Trailing silence", saving: "Saving", saved: "Saved", playing: "Playing", complete: "Task complete", error: "Recording error" }, unnamedTask: "Untitled task", unnamedSpeaker: "Unnamed" },
 };
+Object.assign(TRANSLATIONS.zh, { scanToJoin: "手机扫码加入", scanToJoinHint: "使用手机端“加入已有房间”的扫码按钮，地址、端口和口令会自动填入。" });
+Object.assign(TRANSLATIONS.en, { scanToJoin: "Scan to join on phone", scanToJoinHint: "Use the scanner in the phone app's Join Room. Host IP, port and code will be filled automatically." });
 
 function cleanText(value) { return String(value ?? "").trim(); }
 function t(key, values = {}) {
@@ -218,6 +220,7 @@ function renderSync() {
   const onlineClients = devices.filter((device) => device.role === "client" && device.detail !== "offline");
   elements.syncSummary.textContent = state.sync.mode === "idle" ? t("singleWaiting") : `${state.sync.mode === "host" ? t("hostRoomStatus") : t("connectedHost")} · ${onlineClients.length} ${t("clients")}`;
   elements.hostInfo.textContent = state.sync.mode === "host" ? `${t("hostAddress")}: ${state.sync.address}　${t("port")}: 35679　${t("passcode")}: ${state.sync.roomCode}` : state.sync.mode === "client" ? `${t("connectedToHost")}: ${state.sync.address}　${t("passcode")}: ${state.sync.roomCode}` : t("hostInfoIdle");
+  renderHostInvite();
   elements.openSyncButton.disabled = state.sync.mode !== "host" || !onlineClients.length;
   [elements.recordButton, elements.previousButton, elements.nextButton, elements.playButton, elements.completeButton].forEach((button) => { button.disabled = clientLocked; });
   const dots = document.createDocumentFragment();
@@ -228,6 +231,26 @@ function renderSync() {
   devices.forEach((device) => { const row = document.createElement("div"); row.className = "device-row"; const name = document.createElement("strong"); name.textContent = device.name; const status = document.createElement("span"); status.textContent = device.detail === "offline" ? "离线" : device.state; row.append(name, status); rows.append(row); });
   elements.deviceList.replaceChildren(rows);
   renderSentenceList(clientLocked);
+}
+
+function renderHostInvite() {
+  if (state.sync.mode !== "host") {
+    state.hostInviteKey = "";
+    elements.hostInvite.hidden = true;
+    elements.hostQrImage.removeAttribute("src");
+    return;
+  }
+  const key = `${state.sync.address || ""}|${state.sync.roomCode || ""}|${state.sync.projectId || ""}`;
+  elements.hostInvite.hidden = false;
+  if (state.hostInviteKey === key && elements.hostQrImage.src) return;
+  state.hostInviteKey = key;
+  elements.hostQrImage.removeAttribute("src");
+  bridge.sync.getHostInvite().then((invite) => {
+    if (state.sync.mode !== "host" || state.hostInviteKey !== key) return;
+    elements.hostQrImage.src = invite.qrDataUrl;
+  }).catch((error) => {
+    if (state.hostInviteKey === key) setMessage(error.message, true);
+  });
 }
 
 function render() {

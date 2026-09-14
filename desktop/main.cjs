@@ -4,9 +4,11 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const QRCode = require("qrcode");
 
 const { getRecordingTarget } = require("./core/recording-paths.cjs");
 const { SyncRoom } = require("./core/sync-room.cjs");
+const { createDesktopSyncRoomInvite } = require("./core/sync-invite.cjs");
 const { collectTaskOutputs } = require("./core/task-recordings.cjs");
 const { normalizeTaskWorkspace } = require("./core/task-workspace.cjs");
 const { DEFAULT_DESKTOP_UI, normalizeDesktopUiPreferences } = require("./core/ui-preferences.cjs");
@@ -172,6 +174,16 @@ ipcMain.handle("sync:host", async (_event, input) => syncRoom.host(input));
 ipcMain.handle("sync:join", async (_event, input) => syncRoom.join(input));
 ipcMain.handle("sync:stop", async () => { await syncRoom.stop(); return syncRoom.snapshot(); });
 ipcMain.handle("sync:status", () => syncRoom.snapshot());
+ipcMain.handle("sync:host-invite", async () => {
+  const payload = createDesktopSyncRoomInvite(syncRoom.snapshot());
+  const qrDataUrl = await QRCode.toDataURL(payload, {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 264,
+    color: { dark: "#183050", light: "#FFFFFF" },
+  });
+  return { payload, qrDataUrl };
+});
 ipcMain.handle("sync:command", (_event, name, sentenceIndex) => syncRoom.sendCommand(name, sentenceIndex));
 ipcMain.handle("sync:state", (_event, update) => { syncRoom.reportState(update); return syncRoom.snapshot(); });
 ipcMain.handle("system:device-name", () => os.hostname() || `Windows-${crypto.randomUUID().slice(0, 4)}`);

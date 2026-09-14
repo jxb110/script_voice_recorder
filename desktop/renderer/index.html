@@ -68,6 +68,10 @@
               </div>
               <div class="sync-actions"><button id="hostButton" class="button primary" data-i18n="hostRoom">创建主控房间</button><button id="joinButton" class="button secondary" data-i18n="joinRoom">加入已有房间</button><button id="openSyncButton" class="button primary" data-i18n="enterSync">进入同步录制</button><button id="closeSyncButton" class="button danger" data-i18n="closeSync">关闭同步</button></div>
               <div id="hostInfo" class="host-info">创建房间后显示本机 IP、端口与口令。</div>
+              <div id="hostInvite" class="host-invite" hidden>
+                <img id="hostQrImage" class="host-qr-image" alt="主控房间二维码" />
+                <div><strong data-i18n="scanToJoin">手机扫码加入</strong><small data-i18n="scanToJoinHint">使用手机端“加入已有房间”的扫码按钮，地址、端口和口令会自动填入。</small></div>
+              </div>
               <div id="deviceList" class="device-list" aria-label="已连接设备"></div>
             </div>
           </section>
