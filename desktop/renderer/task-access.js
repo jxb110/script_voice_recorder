@@ -11,7 +11,11 @@
     };
   }
 
-  const api = { resolveTaskEditState };
+  function shouldShowRecordedStatus({ recordingCount = 0 } = {}) {
+    return Number(recordingCount) > 0;
+  }
+
+  const api = { resolveTaskEditState, shouldShowRecordedStatus };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (global) global.DesktopTaskAccess = api;
 })(typeof window === "undefined" ? globalThis : window);

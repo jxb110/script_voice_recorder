@@ -262,7 +262,7 @@ function render() {
   elements.hostButton.disabled = taskAccess.hostDisabled;
   elements.importScriptButton.title = taskAccess.lockedByClientSync ? "当前电脑为被控同步设备，进入同步录制后不能修改脚本或任务信息。" : taskAccess.lockedByRecording ? "任务已有录音，不能更换脚本或修改任务与发音人信息。" : "导入 TXT 脚本";
   elements.hostButton.title = taskAccess.hostDisabled ? "当前电脑为被控同步设备，关闭同步后才能创建主控房间。" : "创建主控房间";
-  elements.scriptSummary.textContent = state.sentences.length ? `${state.sentences.length} ${t("sentence")} · ${state.scriptName || t("noScript")}${locked ? ` · ${t("recorded")}` : ""}` : t("noScript");
+  elements.scriptSummary.textContent = state.sentences.length ? `${state.sentences.length} ${t("sentence")} · ${state.scriptName || t("noScript")}${window.DesktopTaskAccess.shouldShowRecordedStatus({ recordingCount: state.recorded.size }) ? ` · ${t("recorded")}` : ""}` : t("noScript");
   elements.progressText.textContent = sentence ? state.ui.language === "en" ? `Sentence ${state.currentIndex + 1} / ${state.sentences.length}` : `第 ${state.currentIndex + 1} / ${state.sentences.length} 句` : t("noScript");
   elements.promptText.textContent = sentence?.prompt || t("importToShowPrompt");
   renderReadingText(sentence);
