@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, session, shell } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
@@ -9,10 +9,11 @@ const { getRecordingTarget } = require("./core/recording-paths.cjs");
 const { SyncRoom } = require("./core/sync-room.cjs");
 const { collectTaskOutputs } = require("./core/task-recordings.cjs");
 const { normalizeTaskWorkspace } = require("./core/task-workspace.cjs");
+const { DEFAULT_DESKTOP_UI, normalizeDesktopUiPreferences } = require("./core/ui-preferences.cjs");
 
 let mainWindow = null;
 let syncRoom = null;
-let desktopState = { settings: { sampleRate: 48000, bitDepth: 16, channels: 1, leadingSilenceMs: 500, trailingSilenceMs: 500, recordingRoot: path.join(os.homedir(), "Documents") }, outputs: {}, taskWorkspace: { current: undefined, archive: [] } };
+let desktopState = { settings: { sampleRate: 48000, bitDepth: 16, channels: 1, leadingSilenceMs: 500, trailingSilenceMs: 500, recordingRoot: path.join(os.homedir(), "Documents"), ui: DEFAULT_DESKTOP_UI }, outputs: {}, taskWorkspace: { current: undefined, archive: [] } };
 
 const statePath = () => path.join(app.getPath("userData"), "desktop-state.json");
 const safeError = (error) => error instanceof Error ? error.message : "发生未知错误。";
@@ -26,7 +27,7 @@ async function loadState() {
     desktopState = {
       ...desktopState,
       ...saved,
-      settings: { ...desktopState.settings, ...(saved.settings || {}) },
+      settings: { ...desktopState.settings, ...(saved.settings || {}), ui: normalizeDesktopUiPreferences(saved.settings?.ui) },
       outputs: saved.outputs && typeof saved.outputs === "object" ? saved.outputs : {},
       taskWorkspace: normalizeTaskWorkspace(saved.taskWorkspace),
     };
@@ -46,7 +47,7 @@ function validateSettings(input) {
   if (!allowedChannels.has(Number(next.channels))) throw new Error("声道仅支持单声道或双声道。");
   for (const key of ["leadingSilenceMs", "trailingSilenceMs"]) if (!Number.isInteger(Number(next[key])) || Number(next[key]) < 0 || Number(next[key]) > 10000) throw new Error("首尾静音必须是 0 到 10000 毫秒之间的整数。");
   if (typeof next.recordingRoot !== "string" || !path.isAbsolute(next.recordingRoot)) throw new Error("请选择有效的数据保存路径。");
-  return { ...next, sampleRate: Number(next.sampleRate), bitDepth: Number(next.bitDepth), channels: Number(next.channels), leadingSilenceMs: Number(next.leadingSilenceMs), trailingSilenceMs: Number(next.trailingSilenceMs) };
+  return { ...next, sampleRate: Number(next.sampleRate), bitDepth: Number(next.bitDepth), channels: Number(next.channels), leadingSilenceMs: Number(next.leadingSilenceMs), trailingSilenceMs: Number(next.trailingSilenceMs), ui: normalizeDesktopUiPreferences(next.ui) };
 }
 
 function outputKey(project, speaker, sentenceIndex) { return `${project.name}\u241E${speaker.name}\u241E${sentenceIndex}`; }
@@ -75,6 +76,16 @@ async function deleteTaskRecordings(payload) {
   }
   await saveState();
   return { deletedCount: entries.length };
+}
+
+async function openTaskDirectory(payload) {
+  const { project, speaker } = payload ?? {};
+  if (!project?.name || !speaker?.name) throw new Error("任务或发音人信息无效，无法打开数据目录。 ");
+  const target = getRecordingTarget(desktopState.settings.recordingRoot, project, speaker, 1);
+  await fs.mkdir(target.directory, { recursive: true });
+  const error = await shell.openPath(target.directory);
+  if (error) throw new Error(`无法打开数据目录：${error}`);
+  return { directory: target.directory };
 }
 
 function sendSyncEvent(event) { mainWindow?.webContents.send("sync:event", event); }
@@ -120,6 +131,7 @@ ipcMain.handle("dialog:open-script", async () => {
 });
 ipcMain.handle("recording:save", async (_event, payload) => saveRecording(payload));
 ipcMain.handle("recording:delete-task", async (_event, payload) => deleteTaskRecordings(payload));
+ipcMain.handle("recording:open-task-directory", async (_event, payload) => openTaskDirectory(payload));
 ipcMain.handle("recording:get", async (_event, payload) => {
   const { project, speaker, sentenceIndex } = payload ?? {};
   if (!project?.name || !speaker?.name || !Number.isInteger(sentenceIndex) || sentenceIndex < 1) return undefined;

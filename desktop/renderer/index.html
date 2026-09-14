@@ -28,7 +28,7 @@
               <label>性别<select id="speakerGender"><option>女</option><option>男</option><option selected>其他</option></select></label>
               <label>年龄<input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
             </div>
-            <div class="task-actions"><button id="importScriptButton" class="button primary">导入 TXT 脚本</button><button id="deleteTaskButton" class="button danger">删除当前任务</button></div>
+            <div class="task-actions"><button id="importScriptButton" class="button primary">导入 TXT 脚本</button><button id="openTaskDirectoryButton" class="button secondary">打开数据目录</button><button id="deleteTaskButton" class="button danger">删除当前任务</button></div>
             <div id="sentenceList" class="sentence-list" aria-label="句子列表"></div>
           </div>
         </aside>
@@ -42,9 +42,9 @@
               <span id="recordState" class="record-state">待命</span>
             </div>
             <div id="deviceDots" class="device-dots" aria-label="同步设备状态"></div>
-            <div class="prompt-card"><span>提示词</span><strong id="promptText">导入脚本后显示提示词</strong></div>
-            <div class="reading-card"><span>朗读文本</span><div id="readingText">请先导入 TXT 脚本</div></div>
-            <div class="wave-shell"><canvas id="waveCanvas" aria-label="录音波形"></canvas><div class="wave-grid" aria-hidden="true"></div><div id="waveCursor" class="wave-cursor" aria-hidden="true"></div></div>
+            <div id="promptCard" class="prompt-card resizable-panel"><span>提示词</span><strong id="promptText">导入脚本后显示提示词</strong><button class="resize-handle" data-resize-panel="prompt" type="button" aria-label="拖动调整提示词区域高度"></button></div>
+            <div id="readingCard" class="reading-card resizable-panel"><span>朗读文本</span><div class="reading-font-control"><label for="readingFontSize">字号</label><input id="readingFontSize" type="range" min="15" max="50" step="1" value="20" /><output id="readingFontSizeValue" for="readingFontSize">20</output></div><div id="readingText">请先导入 TXT 脚本</div><button class="resize-handle" data-resize-panel="reading" type="button" aria-label="拖动调整朗读文本区域高度"></button></div>
+            <div id="waveShell" class="wave-shell resizable-panel"><canvas id="waveCanvas" aria-label="录音波形"></canvas><div class="wave-grid" aria-hidden="true"></div><div id="waveCursor" class="wave-cursor" aria-hidden="true"></div><button class="resize-handle" data-resize-panel="wave" type="button" aria-label="拖动调整波形区域高度"></button></div>
             <div class="transport-bar" aria-label="录制操作">
               <button id="previousButton" class="button icon-button" title="上一句">‹</button>
               <button id="recordButton" class="button record">开始录制</button>

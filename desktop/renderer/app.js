@@ -1,16 +1,21 @@
 const bridge = window.desktopBridge;
 const elementIds = [
-  "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "readingText", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "waveCursor", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
+  "projectName", "speakerName", "speakerGender", "speakerAge", "scriptSummary", "sentenceList", "promptText", "promptCard", "readingText", "readingCard", "readingFontSize", "readingFontSizeValue", "progressText", "recordState", "recordMessage", "deviceDots", "deviceName", "hostIp", "hostPort", "roomCode", "hostInfo", "deviceList", "syncSummary", "sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot", "waveCanvas", "waveCursor", "waveShell", "recordButton", "previousButton", "nextButton", "playButton", "completeButton", "openSyncButton", "closeSyncButton", "hostButton", "joinButton", "choosePathButton", "settingsActionButton", "importScriptButton", "newTaskButton", "openTaskDirectoryButton", "deleteTaskButton", "currentTaskCard", "taskArchive",
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 const missingElement = elementIds.find((id) => !elements[id]);
 if (missingElement) throw new Error(`桌面录音界面缺少必要元素：${missingElement}`);
 
-const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, analyser: null, mediaStream: null, chunks: [], playing: null, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "" };
+const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, audio: null, audioNode: null, analyser: null, mediaStream: null, chunks: [], playing: null, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null };
 const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "microphone", "recordingRoot"];
 const taskIdentityFields = ["projectName", "speakerName", "speakerGender", "speakerAge"];
 
 function cleanText(value) { return String(value ?? "").trim(); }
+function clamp(value, minimum, maximum) { return Math.min(maximum, Math.max(minimum, Math.round(Number(value) || minimum))); }
+function normalizeUiPreferences(value) {
+  const panels = value?.panelHeights || {};
+  return { readingFontSize: clamp(value?.readingFontSize, 15, 50), panelHeights: { prompt: clamp(panels.prompt, 68, 220), reading: clamp(panels.reading, 116, 440), wave: clamp(panels.wave, 120, 500) } };
+}
 function createTaskId() { return `desktop_task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
 function sentenceText(sentence) { return sentence?.tokens?.map((token) => token.char).join("") || sentence?.rawText || ""; }
 function currentSentence() { return state.sentences[state.currentIndex]; }
@@ -62,6 +67,47 @@ function setSettingsEditMode(editing) {
   elements.choosePathButton.disabled = !editing;
   elements.settingsActionButton.textContent = editing ? "保存配置" : "修改配置";
   elements.settingsActionButton.classList.toggle("primary", true);
+}
+
+function applyUiPreferences() {
+  state.ui = normalizeUiPreferences(state.ui);
+  const { readingFontSize, panelHeights } = state.ui;
+  const pinyinSize = Math.max(11, Math.round(readingFontSize * 0.45));
+  elements.promptCard.style.setProperty("--panel-height", `${panelHeights.prompt}px`);
+  elements.readingCard.style.setProperty("--panel-height", `${panelHeights.reading}px`);
+  elements.waveShell.style.setProperty("--panel-height", `${panelHeights.wave}px`);
+  elements.readingText.style.setProperty("--reading-font-size", `${readingFontSize}px`);
+  elements.readingText.style.setProperty("--pinyin-font-size", `${pinyinSize}px`);
+  elements.readingFontSize.value = String(readingFontSize);
+  elements.readingFontSizeValue.value = String(readingFontSize);
+  elements.readingFontSizeValue.textContent = String(readingFontSize);
+  scheduleWaveDraw();
+}
+
+async function persistUiPreferences() { state.settings = await bridge.saveSettings({ ...state.settings, ui: state.ui }); }
+
+function beginPanelResize(event) {
+  event.preventDefault();
+  const panel = event.currentTarget.dataset.resizePanel;
+  const target = panel === "wave" ? elements.waveShell : elements[`${panel}Card`];
+  const limits = { prompt: [68, 220], reading: [116, 440], wave: [120, 500] }[panel];
+  if (!target || !limits) return;
+  state.resizingPanel = { panel, startY: event.clientY, startHeight: target.getBoundingClientRect().height, limits };
+  document.body.classList.add("resizing-panel");
+}
+
+function movePanelResize(event) {
+  if (!state.resizingPanel) return;
+  const { panel, startY, startHeight, limits } = state.resizingPanel;
+  state.ui.panelHeights[panel] = clamp(startHeight + event.clientY - startY, limits[0], limits[1]);
+  applyUiPreferences();
+}
+
+function endPanelResize() {
+  if (!state.resizingPanel) return;
+  state.resizingPanel = null;
+  document.body.classList.remove("resizing-panel");
+  persistUiPreferences().catch((error) => setMessage(error.message, true));
 }
 
 function setFold(card, folded) {
@@ -134,6 +180,7 @@ function renderSync() {
   const dots = document.createDocumentFragment();
   devices.forEach((device) => { const dot = document.createElement("button"); dot.className = `device-dot ${device.detail === "offline" ? "offline" : ["ready", "leading", "recording", "trailing", "saving"].includes(device.state) ? "online" : "waiting"}`; dot.textContent = (device.name || "?").slice(0, 1); dot.title = `${device.name} · ${device.detail === "offline" ? "离线" : device.state}`; dots.append(dot); });
   elements.deviceDots.replaceChildren(dots);
+  elements.deviceDots.classList.toggle("empty", !devices.length);
   const rows = document.createDocumentFragment();
   devices.forEach((device) => { const row = document.createElement("div"); row.className = "device-row"; const name = document.createElement("strong"); name.textContent = device.name; const status = document.createElement("span"); status.textContent = device.detail === "offline" ? "离线" : device.state; row.append(name, status); rows.append(row); });
   elements.deviceList.replaceChildren(rows);
@@ -292,11 +339,17 @@ elements.newTaskButton.onclick = async () => { try { if (!window.confirm("新建
 elements.deleteTaskButton.onclick = async () => { try { const project = currentProject(); if (!window.confirm(`确定删除桌面任务“${project.name}”吗？该任务已管理的 WAV 文件会一并删除，此操作不可恢复。`)) return; const result = await bridge.deleteTask({ project }); await resetCurrentTask({ resetIdentity: true }); await persistTaskWorkspace(); setMessage(`已删除任务及 ${result.deletedCount} 条桌面 WAV 记录。`); } catch (error) { setMessage(error.message, true); } };
 elements.settingsActionButton.onclick = async () => { try { if (!state.editingSettings) { setSettingsEditMode(true); setMessage("现在可以修改电脑录音配置。修改后请保存。"); return; } state.settings = await bridge.saveSettings({ sampleRate: Number(elements.sampleRate.value), channels: Number(elements.channels.value), bitDepth: Number(elements.bitDepth.value), leadingSilenceMs: Number(elements.leadingSilenceMs.value), trailingSilenceMs: Number(elements.trailingSilenceMs.value), recordingRoot: elements.recordingRoot.value }); setSettingsEditMode(false); setMessage("电脑录音配置已保存。新录制将使用此配置。"); } catch (error) { setMessage(error.message, true); } };
 elements.choosePathButton.onclick = async () => { const directory = await bridge.chooseDirectory(); if (directory) elements.recordingRoot.value = directory; };
+elements.openTaskDirectoryButton.onclick = async () => { try { const result = await bridge.openTaskDirectory({ project: currentProject(), speaker: currentSpeaker() }); setMessage(`已打开数据目录：${result.directory}`); } catch (error) { setMessage(error.message, true); } };
 elements.recordButton.onclick = () => requestRecordToggle().catch((error) => setMessage(error.message, true)); elements.previousButton.onclick = () => requestJump(-1).catch((error) => setMessage(error.message, true)); elements.nextButton.onclick = () => requestJump(1).catch((error) => setMessage(error.message, true)); elements.playButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("play", state.currentIndex); else playCurrent().catch((error) => setMessage(error.message, true)); }; elements.completeButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("complete", state.currentIndex); else completeCurrentTask().catch((error) => setMessage(error.message, true)); };
 elements.hostButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.host({ projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); elements.roomCode.value = state.sync.roomCode; render(); } catch (error) { setMessage(error.message, true); } }; elements.joinButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.join({ host: elements.hostIp.value.trim(), port: Number(elements.hostPort.value), roomCode: elements.roomCode.value, projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); render(); } catch (error) { setMessage(error.message, true); } }; elements.closeSyncButton.onclick = async () => { state.sync = await bridge.sync.stop(); render(); }; elements.openSyncButton.onclick = enterSyncRecording;
 document.querySelectorAll(".fold-card").forEach((card) => card.querySelector(".fold-trigger").onclick = () => setFold(card, !card.classList.contains("folded")));
 taskIdentityFields.forEach((field) => { elements[field].oninput = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; });
+elements.readingFontSize.oninput = () => { state.ui.readingFontSize = clamp(elements.readingFontSize.value, 15, 50); applyUiPreferences(); };
+elements.readingFontSize.onchange = () => { persistUiPreferences().catch((error) => setMessage(error.message, true)); };
+document.querySelectorAll("[data-resize-panel]").forEach((handle) => handle.addEventListener("pointerdown", beginPanelResize));
+window.addEventListener("pointermove", movePanelResize);
+window.addEventListener("pointerup", endPanelResize);
 elements.projectName.onchange = () => { if (!taskLocked()) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerName.onchange = () => { if (!taskLocked()) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerGender.onchange = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; elements.speakerAge.onchange = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); };
 bridge.sync.onEvent((event) => { state.sync = event.session || state.sync; if (event.type === "command" && event.payload) handleCommand(event.payload); render(); });
 window.addEventListener("resize", scheduleWaveDraw);
-(async () => { state.settings = await bridge.getSettings(); for (const key of ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"]) elements[key].value = state.settings[key]; const workspace = await bridge.getTaskWorkspace(); state.taskArchive = (workspace.archive || []).map((task) => ({ ...task, recorded: new Map(task.recorded || []) })); if (workspace.current) restoreTask({ ...workspace.current, recorded: new Map(workspace.current.recorded || []) }); else await resetCurrentTask({ resetIdentity: true }); elements.deviceName.value = await bridge.getDeviceName(); state.sync = await bridge.sync.status(); await listMicrophones(); setSettingsEditMode(false); await hydrateRecordedState({ persist: true }); render(); })().catch((error) => setMessage(error.message, true));
+(async () => { state.settings = await bridge.getSettings(); state.ui = normalizeUiPreferences(state.settings.ui); for (const key of ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"]) elements[key].value = state.settings[key]; const workspace = await bridge.getTaskWorkspace(); state.taskArchive = (workspace.archive || []).map((task) => ({ ...task, recorded: new Map(task.recorded || []) })); if (workspace.current) restoreTask({ ...workspace.current, recorded: new Map(workspace.current.recorded || []) }); else await resetCurrentTask({ resetIdentity: true }); elements.deviceName.value = await bridge.getDeviceName(); state.sync = await bridge.sync.status(); await listMicrophones(); setSettingsEditMode(false); applyUiPreferences(); await hydrateRecordedState({ persist: true }); render(); })().catch((error) => setMessage(error.message, true));

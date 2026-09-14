@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   openScript: () => ipcRenderer.invoke("dialog:open-script"),
   saveRecording: (payload) => ipcRenderer.invoke("recording:save", payload),
   deleteTask: (payload) => ipcRenderer.invoke("recording:delete-task", payload),
+  openTaskDirectory: (payload) => ipcRenderer.invoke("recording:open-task-directory", payload),
   getRecording: (payload) => ipcRenderer.invoke("recording:get", payload),
   getTaskWorkspace: () => ipcRenderer.invoke("tasks:get-workspace"),
   saveTaskWorkspace: (workspace) => ipcRenderer.invoke("tasks:save-workspace", workspace),
