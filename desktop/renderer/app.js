@@ -43,6 +43,7 @@ function setMessage(message, error = false) { elements.recordMessage.textContent
 function requireSentences() { if (!state.sentences.length) throw new Error("请先导入 TXT 脚本。"); }
 function taskHasRecordings(task) { return task?.recorded instanceof Map ? task.recorded.size > 0 : Array.isArray(task?.recorded) && task.recorded.length > 0; }
 function taskLocked() { return state.recorded.size > 0; }
+function taskEditState() { return window.DesktopTaskAccess.resolveTaskEditState({ recordingCount: state.recorded.size, syncMode: state.sync.mode }); }
 function serializeTask(task) { return { ...task, recorded: task.recorded instanceof Map ? [...task.recorded.entries()] : task.recorded || [] }; }
 async function persistTaskWorkspace() { await bridge.saveTaskWorkspace({ current: serializeTask(captureCurrentTask()), archive: state.taskArchive.map(serializeTask) }); }
 function getAutoNext(index, total) { return index + 1 < total ? index + 1 : undefined; }
@@ -255,10 +256,12 @@ function renderHostInvite() {
 
 function render() {
   const sentence = currentSentence();
-  const locked = taskLocked();
-  taskIdentityFields.forEach((field) => { elements[field].disabled = locked; });
-  elements.importScriptButton.disabled = locked;
-  elements.importScriptButton.title = locked ? "任务已有录音，不能更换脚本或修改任务与发音人信息。" : "导入 TXT 脚本";
+  const taskAccess = taskEditState();
+  taskIdentityFields.forEach((field) => { elements[field].disabled = taskAccess.disabled; });
+  elements.importScriptButton.disabled = taskAccess.disabled;
+  elements.hostButton.disabled = taskAccess.hostDisabled;
+  elements.importScriptButton.title = taskAccess.lockedByClientSync ? "当前电脑为被控同步设备，进入同步录制后不能修改脚本或任务信息。" : taskAccess.lockedByRecording ? "任务已有录音，不能更换脚本或修改任务与发音人信息。" : "导入 TXT 脚本";
+  elements.hostButton.title = taskAccess.hostDisabled ? "当前电脑为被控同步设备，关闭同步后才能创建主控房间。" : "创建主控房间";
   elements.scriptSummary.textContent = state.sentences.length ? `${state.sentences.length} ${t("sentence")} · ${state.scriptName || t("noScript")}${locked ? ` · ${t("recorded")}` : ""}` : t("noScript");
   elements.progressText.textContent = sentence ? state.ui.language === "en" ? `Sentence ${state.currentIndex + 1} / ${state.sentences.length}` : `第 ${state.currentIndex + 1} / ${state.sentences.length} 句` : t("noScript");
   elements.promptText.textContent = sentence?.prompt || t("importToShowPrompt");
@@ -442,6 +445,11 @@ async function resetCurrentTask({ resetIdentity }) {
   state.sentences = []; state.currentIndex = 0; state.scriptName = ""; state.recorded.clear(); state.wave = []; state.currentTaskId = createTaskId();
   if (resetIdentity) { elements.projectName.value = t("unnamedTask"); elements.speakerName.value = t("unnamedSpeaker"); elements.speakerGender.value = "其他"; elements.speakerAge.value = "0"; }
   setRecordPhase("ready"); render();
+  if (resetIdentity) {
+    taskIdentityFields.forEach((field) => { elements[field].disabled = false; });
+    elements.importScriptButton.disabled = false;
+    queueMicrotask(() => elements.projectName.focus());
+  }
 }
 elements.importScriptButton.onclick = async () => { try { if (taskLocked()) throw new Error("任务已有录音，不能更换脚本。请新建任务，或先删除当前任务。 "); const file = await bridge.openScript(); if (!file) return; state.sentences = parseScript(file.content); state.scriptName = file.name; state.currentIndex = 0; state.recorded.clear(); await hydrateRecordedState({ persist: false }); await persistTaskWorkspace(); setMessage(`已导入 ${state.sentences.length} 句脚本。`); render(); } catch (error) { setMessage(error.message, true); } };
 elements.newTaskButton.onclick = async () => { try { if (!window.confirm("新建任务会关闭当前同步会话。当前任务会保留为可展开模块，已保存 WAV 文件不会删除。是否继续？")) return; const previous = captureCurrentTask(); if (taskHasContent(previous)) state.taskArchive.push(previous); await resetCurrentTask({ resetIdentity: true }); setFold(elements.currentTaskCard, false); await persistTaskWorkspace(); setMessage("已新建空任务，现在可以立即填写任务与发音人信息，再导入 TXT 脚本。"); } catch (error) { setMessage(error.message, true); } };
@@ -453,7 +461,7 @@ elements.waveCanvas.addEventListener("click", playFromWaveform);
 elements.recordButton.onclick = () => requestRecordToggle().catch((error) => setMessage(error.message, true)); elements.previousButton.onclick = () => requestJump(-1).catch((error) => setMessage(error.message, true)); elements.nextButton.onclick = () => requestJump(1).catch((error) => setMessage(error.message, true)); elements.playButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("play", state.currentIndex); else playCurrent().catch((error) => setMessage(error.message, true)); }; elements.completeButton.onclick = () => { if (state.sync.mode === "host") bridge.sync.command("complete", state.currentIndex); else completeCurrentTask().catch((error) => setMessage(error.message, true)); };
 elements.hostButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.host({ projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); elements.roomCode.value = state.sync.roomCode; render(); } catch (error) { setMessage(error.message, true); } }; elements.joinButton.onclick = async () => { try { requireSentences(); state.sync = await bridge.sync.join({ host: elements.hostIp.value.trim(), port: Number(elements.hostPort.value), roomCode: elements.roomCode.value, projectId: projectKey(), sentenceCount: state.sentences.length, deviceName: elements.deviceName.value }); render(); } catch (error) { setMessage(error.message, true); } }; elements.closeSyncButton.onclick = async () => { state.sync = await bridge.sync.stop(); render(); }; elements.openSyncButton.onclick = enterSyncRecording;
 document.querySelectorAll(".fold-card").forEach((card) => card.querySelector(".fold-trigger").onclick = () => setFold(card, !card.classList.contains("folded")));
-taskIdentityFields.forEach((field) => { elements[field].oninput = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; });
+taskIdentityFields.forEach((field) => { elements[field].oninput = () => { if (!taskEditState().disabled) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; });
 elements.readingFontSize.oninput = () => { state.ui.readingFontSize = clamp(elements.readingFontSize.value, 15, 50); applyUiPreferences(); };
 elements.readingFontSize.onchange = () => { persistUiPreferences().catch((error) => setMessage(error.message, true)); };
 document.querySelectorAll("[data-resize-panel]").forEach((handle) => handle.addEventListener("pointerdown", beginPanelResize));
@@ -462,7 +470,7 @@ window.addEventListener("pointermove", movePanelResize);
 window.addEventListener("pointerup", endPanelResize);
 window.addEventListener("pointermove", moveSidebarResize);
 window.addEventListener("pointerup", endSidebarResize);
-elements.projectName.onchange = () => { if (!taskLocked()) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerName.onchange = () => { if (!taskLocked()) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerGender.onchange = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; elements.speakerAge.onchange = () => { if (!taskLocked()) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); };
+elements.projectName.onchange = () => { if (!taskEditState().disabled) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerName.onchange = () => { if (!taskEditState().disabled) hydrateRecordedState().catch((error) => setMessage(error.message, true)); }; elements.speakerGender.onchange = () => { if (!taskEditState().disabled) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); }; elements.speakerAge.onchange = () => { if (!taskEditState().disabled) persistTaskWorkspace().catch((error) => setMessage(error.message, true)); };
 bridge.sync.onEvent((event) => { state.sync = event.session || state.sync; if (event.type === "command" && event.payload) handleCommand(event.payload); render(); });
 bridge.onLanguage((language) => { state.ui.language = language === "en" ? "en" : "zh"; applyLanguage(); if (state.settings) persistUiPreferences().catch((error) => setMessage(error.message, true)); });
 window.addEventListener("resize", scheduleWaveDraw);

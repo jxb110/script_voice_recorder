@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
-    "test": "node --test --test-force-exit core/*.test.cjs",
+    "test": "node --test --test-force-exit core/*.test.cjs renderer/*.test.cjs",
     "package:win": "electron-builder --win nsis"
   },
   "dependencies": {
