@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getTaskWorkspace: () => ipcRenderer.invoke("tasks:get-workspace"),
   saveTaskWorkspace: (workspace) => ipcRenderer.invoke("tasks:save-workspace", workspace),
   getDeviceName: () => ipcRenderer.invoke("system:device-name"),
+  onLanguage: (listener) => { const callback = (_event, language) => listener(language); ipcRenderer.on("app:language", callback); return () => ipcRenderer.removeListener("app:language", callback); },
   sync: {
     host: (input) => ipcRenderer.invoke("sync:host", input),
     join: (input) => ipcRenderer.invoke("sync:join", input),

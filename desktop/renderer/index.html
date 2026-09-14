@@ -11,79 +11,80 @@
       <header class="topbar glass">
         <div class="brand-block">
           <p class="eyebrow">SCRIPT VOICE RECORDER · DESKTOP 4.0.0</p>
-          <h1>采音脚本</h1>
+          <h1 data-i18n="appTitle">采音脚本</h1>
           <p id="syncSummary" class="status-line">单机录音 · 等待导入脚本</p>
         </div>
       </header>
 
-      <section class="workspace">
+      <section id="workspace" class="workspace">
         <section class="task-workspace">
-          <button id="newTaskButton" class="button primary new-task-button" type="button">+ 新建任务</button>
+          <button id="newTaskButton" class="button primary new-task-button" type="button" data-i18n="newTask">+ 新建任务</button>
         <aside id="currentTaskCard" class="sidebar fold-card glass" data-fold="task">
-          <button class="fold-trigger task-fold-trigger" type="button" aria-expanded="true"><span><b>任务与发音人</b><small id="scriptSummary">尚未导入脚本</small></span><span class="fold-chevron">⌄</span></button>
+          <button class="fold-trigger task-fold-trigger" type="button" aria-expanded="true"><span><b data-i18n="taskAndSpeaker">任务与发音人</b><small id="scriptSummary">尚未导入脚本</small></span><span class="fold-chevron">⌄</span></button>
           <div class="fold-content task-fold-content">
-            <label>任务名称<input id="projectName" value="未命名任务" maxlength="48" /></label>
-            <label>发音人姓名<input id="speakerName" value="未命名" maxlength="48" /></label>
+            <label><span data-i18n="taskName">任务名称</span><input id="projectName" value="未命名任务" maxlength="48" /></label>
+            <label><span data-i18n="speakerName">发音人姓名</span><input id="speakerName" value="未命名" maxlength="48" /></label>
             <div class="two-columns">
-              <label>性别<select id="speakerGender"><option>女</option><option>男</option><option selected>其他</option></select></label>
-              <label>年龄<input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
+              <label><span data-i18n="gender">性别</span><select id="speakerGender"><option data-i18n="female">女</option><option data-i18n="male">男</option><option selected data-i18n="other">其他</option></select></label>
+              <label><span data-i18n="age">年龄</span><input id="speakerAge" type="number" min="0" max="120" value="0" /></label>
             </div>
-            <div class="task-actions"><button id="importScriptButton" class="button primary">导入 TXT 脚本</button><button id="openTaskDirectoryButton" class="button secondary">打开数据目录</button><button id="deleteTaskButton" class="button danger">删除当前任务</button></div>
+            <div class="task-actions"><button id="importScriptButton" class="button primary" data-i18n="importScript">导入 TXT 脚本</button><button id="openTaskDirectoryButton" class="button secondary" data-i18n="openDataDirectory">打开数据目录</button><button id="deleteTaskButton" class="button danger" data-i18n="deleteTask">删除当前任务</button></div>
             <div id="sentenceList" class="sentence-list" aria-label="句子列表"></div>
           </div>
         </aside>
           <div id="taskArchive" class="task-archive" aria-label="已创建任务"></div>
         </section>
+        <button id="sidebarResizeHandle" class="sidebar-resize-handle" type="button" aria-label="拖动调整任务区宽度"></button>
 
         <section class="main-panel">
           <section class="record-card glass">
             <div class="record-heading">
-              <div><p class="eyebrow">CURRENT TAKE</p><h2 id="progressText">尚未导入脚本</h2></div>
-              <span id="recordState" class="record-state">待命</span>
+              <div><p class="eyebrow" data-i18n="currentTake">CURRENT TAKE</p><h2 id="progressText">尚未导入脚本</h2></div>
+              <span id="recordState" class="record-state" data-i18n="ready">待命</span>
             </div>
             <div id="deviceDots" class="device-dots" aria-label="同步设备状态"></div>
-            <div id="promptCard" class="prompt-card resizable-panel"><span>提示词</span><strong id="promptText">导入脚本后显示提示词</strong><button class="resize-handle" data-resize-panel="prompt" type="button" aria-label="拖动调整提示词区域高度"></button></div>
-            <div id="readingCard" class="reading-card resizable-panel"><span>朗读文本</span><div class="reading-font-control"><label for="readingFontSize">字号</label><input id="readingFontSize" type="range" min="15" max="50" step="1" value="20" /><output id="readingFontSizeValue" for="readingFontSize">20</output></div><div id="readingText">请先导入 TXT 脚本</div><button class="resize-handle" data-resize-panel="reading" type="button" aria-label="拖动调整朗读文本区域高度"></button></div>
+            <div id="promptCard" class="prompt-card resizable-panel"><span data-i18n="prompt">提示词</span><strong id="promptText">导入脚本后显示提示词</strong><button class="resize-handle" data-resize-panel="prompt" type="button" aria-label="拖动调整提示词区域高度"></button></div>
+            <div id="readingCard" class="reading-card resizable-panel"><span data-i18n="readingText">朗读文本</span><div class="reading-font-control"><label for="readingFontSize" data-i18n="fontSize">字号</label><input id="readingFontSize" type="range" min="15" max="50" step="1" value="20" /><output id="readingFontSizeValue" for="readingFontSize">20</output></div><div id="readingText">请先导入 TXT 脚本</div><button class="resize-handle" data-resize-panel="reading" type="button" aria-label="拖动调整朗读文本区域高度"></button></div>
             <div id="waveShell" class="wave-shell resizable-panel"><canvas id="waveCanvas" aria-label="录音波形"></canvas><div class="wave-grid" aria-hidden="true"></div><div id="waveCursor" class="wave-cursor" aria-hidden="true"></div><button class="resize-handle" data-resize-panel="wave" type="button" aria-label="拖动调整波形区域高度"></button></div>
             <div class="transport-bar" aria-label="录制操作">
-              <button id="previousButton" class="button icon-button" title="上一句">‹</button>
-              <button id="recordButton" class="button record">开始录制</button>
-              <button id="nextButton" class="button icon-button" title="下一句">›</button>
+              <button id="previousButton" class="button icon-button" title="上一句" data-i18n-title="previous">‹</button>
+              <button id="recordButton" class="button record" data-i18n="startRecording">开始录制</button>
+              <button id="nextButton" class="button icon-button" title="下一句" data-i18n-title="next">›</button>
               <span class="transport-divider"></span>
-              <button id="playButton" class="button secondary compact">播放</button>
-              <button id="completeButton" class="button secondary compact">完成任务</button>
+              <button id="playButton" class="button secondary compact" data-i18n="play">播放</button>
+              <button id="completeButton" class="button secondary compact" data-i18n="completeTask">完成任务</button>
             </div>
-            <p id="recordMessage" class="record-message" role="status">电脑端录音会保存为 WAV。</p>
+            <p id="recordMessage" class="record-message" role="status" data-i18n="recordingSavedAsWav">电脑端录音会保存为 WAV。</p>
           </section>
 
           <section class="fold-card glass" data-fold="sync">
-            <button class="fold-trigger" type="button" aria-expanded="true"><span><b>多设备同步录音</b><small>电脑可创建主控房间，或加入手机/电脑主控房间</small></span><span class="fold-chevron">⌄</span></button>
+            <button class="fold-trigger" type="button" aria-expanded="true"><span><b data-i18n="syncRecording">多设备同步录音</b><small data-i18n="syncSubtitle">电脑可创建主控房间，或加入手机/电脑主控房间</small></span><span class="fold-chevron">⌄</span></button>
             <div class="fold-content">
               <div class="sync-grid">
-                <label>设备名称<input id="deviceName" /></label>
-                <label>主控 IP<input id="hostIp" placeholder="例如 192.168.1.10" /></label>
-                <label>端口<input id="hostPort" type="number" value="35679" min="1" max="65535" /></label>
-                <label>房间口令<input id="roomCode" maxlength="12" /></label>
+                <label><span data-i18n="deviceName">设备名称</span><input id="deviceName" /></label>
+                <label><span data-i18n="hostIp">主控 IP</span><input id="hostIp" placeholder="例如 192.168.1.10" /></label>
+                <label><span data-i18n="port">端口</span><input id="hostPort" type="number" value="35679" min="1" max="65535" /></label>
+                <label><span data-i18n="roomCode">房间口令</span><input id="roomCode" maxlength="12" /></label>
               </div>
-              <div class="sync-actions"><button id="hostButton" class="button primary">创建主控房间</button><button id="joinButton" class="button secondary">加入已有房间</button><button id="openSyncButton" class="button primary">进入同步录制</button><button id="closeSyncButton" class="button danger">关闭同步</button></div>
+              <div class="sync-actions"><button id="hostButton" class="button primary" data-i18n="hostRoom">创建主控房间</button><button id="joinButton" class="button secondary" data-i18n="joinRoom">加入已有房间</button><button id="openSyncButton" class="button primary" data-i18n="enterSync">进入同步录制</button><button id="closeSyncButton" class="button danger" data-i18n="closeSync">关闭同步</button></div>
               <div id="hostInfo" class="host-info">创建房间后显示本机 IP、端口与口令。</div>
               <div id="deviceList" class="device-list" aria-label="已连接设备"></div>
             </div>
           </section>
 
           <section class="fold-card glass" data-fold="settings">
-            <button class="fold-trigger" type="button" aria-expanded="true"><span><b>电脑录音配置</b><small>与手机端一致的 WAV 参数和目录结构</small></span><span class="fold-chevron">⌄</span></button>
+            <button class="fold-trigger" type="button" aria-expanded="true"><span><b data-i18n="desktopSettings">电脑录音配置</b><small data-i18n="settingsSubtitle">与手机端一致的 WAV 参数和目录结构</small></span><span class="fold-chevron">⌄</span></button>
             <div class="fold-content">
               <div class="settings-grid">
-                <label>采样率<select id="sampleRate"><option value="16000">16 kHz</option><option value="22050">22.05 kHz</option><option value="24000">24 kHz</option><option value="44100">44.1 kHz</option><option value="48000" selected>48 kHz</option></select></label>
-                <label>声道<select id="channels"><option value="1">单声道</option><option value="2">双声道</option></select></label>
-                <label>位深<select id="bitDepth"><option value="16">16-bit</option><option value="32">32-bit</option></select></label>
-                <label>麦克风<select id="microphone"><option value="">正在读取麦克风…</option></select></label>
-                <label>首端静音（毫秒）<input id="leadingSilenceMs" type="number" min="0" max="10000" /></label>
-                <label>尾端静音（毫秒）<input id="trailingSilenceMs" type="number" min="0" max="10000" /></label>
-                <label class="path-field">数据保存路径<div class="path-picker"><input id="recordingRoot" readonly /><button id="choosePathButton" class="button secondary compact" type="button">选择</button></div></label>
+                <label><span data-i18n="sampleRate">采样率</span><select id="sampleRate"><option value="16000">16 kHz</option><option value="22050">22.05 kHz</option><option value="24000">24 kHz</option><option value="44100">44.1 kHz</option><option value="48000" selected>48 kHz</option></select></label>
+                <label><span data-i18n="channels">声道</span><select id="channels"><option value="1" data-i18n="mono">单声道</option><option value="2" data-i18n="stereo">双声道</option></select></label>
+                <label><span data-i18n="bitDepth">位深</span><select id="bitDepth"><option value="16">16-bit</option><option value="32">32-bit</option></select></label>
+                <label><span data-i18n="microphone">麦克风</span><select id="microphone"><option value="" data-i18n="loadingMicrophones">正在读取麦克风…</option></select></label>
+                <label><span data-i18n="leadingSilence">首端静音（毫秒）</span><input id="leadingSilenceMs" type="number" min="0" max="10000" /></label>
+                <label><span data-i18n="trailingSilence">尾端静音（毫秒）</span><input id="trailingSilenceMs" type="number" min="0" max="10000" /></label>
+                <label class="path-field"><span data-i18n="recordingPath">数据保存路径</span><div class="path-picker"><input id="recordingRoot" readonly /><button id="choosePathButton" class="button secondary compact" type="button" data-i18n="choose">选择</button></div></label>
               </div>
-              <div class="settings-footer"><p>修改配置后，新录制的 WAV 将使用新的采样率、声道与位深。</p><button id="settingsActionButton" class="button primary" type="button">修改配置</button></div>
+              <div class="settings-footer"><p data-i18n="settingsDescription">修改配置后，新录制的 WAV 将使用新的采样率、声道与位深。</p><button id="settingsActionButton" class="button primary" type="button" data-i18n="editSettings">修改配置</button></div>
             </div>
           </section>
         </section>

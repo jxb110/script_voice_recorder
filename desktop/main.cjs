@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
@@ -90,6 +90,24 @@ async function openTaskDirectory(payload) {
 
 function sendSyncEvent(event) { mainWindow?.webContents.send("sync:event", event); }
 
+function createLanguageMenu() {
+  const language = desktopState.settings.ui.language;
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{
+    label: "Language",
+    submenu: [
+      { label: "中文", type: "radio", checked: language === "zh", click: () => setLanguage("zh") },
+      { label: "English", type: "radio", checked: language === "en", click: () => setLanguage("en") },
+    ],
+  }]));
+}
+
+async function setLanguage(language) {
+  desktopState.settings.ui = normalizeDesktopUiPreferences({ ...desktopState.settings.ui, language });
+  await saveState();
+  createLanguageMenu();
+  mainWindow?.webContents.send("app:language", desktopState.settings.ui.language);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1180,
@@ -111,6 +129,7 @@ app.whenReady().then(async () => {
   await loadState();
   configurePermissions();
   syncRoom = new SyncRoom(sendSyncEvent);
+  createLanguageMenu();
   createWindow();
   app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
 });
