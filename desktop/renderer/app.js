@@ -6,7 +6,7 @@ const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElem
 const missingElement = elementIds.find((id) => !elements[id]);
 if (missingElement) throw new Error(`桌面录音界面缺少必要元素：${missingElement}`);
 
-const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, syncRecordingActive: false, audio: null, audioNode: null, analyser: null, mediaStreams: [], chunks: [], recordingChannels: 1, microphoneDevices: [], selectedMicrophoneIds: [], playing: null, playbackFrame: 0, playbackProgress: 0, recorded: new Map(), wave: [], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, sidebarWidth: 340, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null, resizingSidebar: null };
+const state = { sentences: [], currentIndex: 0, settings: null, sync: { mode: "idle", devices: [] }, syncRecordingActive: false, audio: null, audioNode: null, analysers: [], mediaStreams: [], chunks: [], recordingChannels: 1, microphoneDevices: [], selectedMicrophoneIds: [], playing: null, playbackFrame: 0, playbackProgress: 0, recorded: new Map(), waveChannels: [[]], waveRenderFrame: 0, waveCaptureFrame: 0, waveLastSampleAt: 0, leadingTimer: null, phaseTimer: null, phase: "ready", phaseEndsAt: 0, phaseStartedAt: 0, scriptName: "", editingSettings: false, taskArchive: [], currentTaskId: "", ui: { readingFontSize: 20, sidebarWidth: 340, panelHeights: { prompt: 68, reading: 180, wave: 176 } }, resizingPanel: null, resizingSidebar: null };
 const settingsFields = ["sampleRate", "channels", "bitDepth", "leadingSilenceMs", "trailingSilenceMs", "recordingRoot"];
 const taskIdentityFields = ["projectName", "speakerName", "speakerGender", "speakerAge"];
 const TRANSLATIONS = {
@@ -201,7 +201,7 @@ function restoreTask(task) {
   state.currentIndex = Math.min(Math.max(0, task.currentIndex), Math.max(0, task.sentences.length - 1));
   state.recorded = new Map(task.recorded instanceof Map ? task.recorded : task.recorded || []);
   state.scriptName = task.scriptName;
-  state.wave = [];
+  state.waveChannels = [[]];
   setRecordPhase("ready");
 }
 
@@ -336,22 +336,23 @@ function startPlaybackCursor() {
   state.playbackFrame = requestAnimationFrame(advance);
 }
 
-function getRealtimeAmplitude() {
-  if (!state.analyser) return 0;
-  const data = new Uint8Array(state.analyser.fftSize);
-  state.analyser.getByteTimeDomainData(data);
-  let sum = 0;
-  for (let index = 0; index < data.length; index += 1) { const value = (data[index] - 128) / 128; sum += value * value; }
-  return Math.min(1, Math.sqrt(sum / data.length) * 3.8);
+function getRealtimeAmplitudes() {
+  return state.analysers.map((analyser) => {
+    const data = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let index = 0; index < data.length; index += 1) { const value = (data[index] - 128) / 128; sum += value * value; }
+    return Math.min(1, Math.sqrt(sum / data.length) * 3.8);
+  });
 }
 
 function startRealtimeWaveform() {
   const capture = (timestamp) => {
-    if (!state.audio || !state.analyser) return;
+    if (!state.audio || !state.analysers.length) return;
     state.waveCaptureFrame = requestAnimationFrame(capture);
     if (timestamp - state.waveLastSampleAt < WAVE_SAMPLE_INTERVAL) return;
     state.waveLastSampleAt = timestamp;
-    state.wave.push(getRealtimeAmplitude());
+    const amplitudes = getRealtimeAmplitudes();
+    state.waveChannels.forEach((channel, index) => channel.push(amplitudes[index] || 0));
     scheduleWaveDraw();
   };
   state.waveLastSampleAt = 0;
@@ -375,11 +376,12 @@ async function loadPlaybackWaveform(url) {
   const decoder = new AudioContext();
   try {
     const decoded = await decoder.decodeAudioData((await response.arrayBuffer()).slice(0));
-    const samples = decoded.getChannelData(0);
     const samplesPerWindow = Math.max(1, Math.round(decoded.sampleRate * (WAVE_SAMPLE_INTERVAL / 1000)));
-    const values = [];
-    for (let start = 0; start < samples.length; start += samplesPerWindow) values.push(calculateRmsAmplitude(samples, start, Math.min(samples.length, start + samplesPerWindow)));
-    state.wave = values;
+    state.waveChannels = Array.from({ length: decoded.numberOfChannels }, (_, channelIndex) => {
+      const samples = decoded.getChannelData(channelIndex); const values = [];
+      for (let start = 0; start < samples.length; start += samplesPerWindow) values.push(calculateRmsAmplitude(samples, start, Math.min(samples.length, start + samplesPerWindow)));
+      return values;
+    });
     scheduleWaveDraw();
   } finally { await decoder.close(); }
 }
@@ -388,14 +390,19 @@ function drawWave() {
   const canvas = elements.waveCanvas; const bounds = canvas.getBoundingClientRect(); const pixelRatio = window.devicePixelRatio || 1; const width = Math.max(1, Math.floor(bounds.width)); const height = Math.max(1, Math.floor(bounds.height));
   if (canvas.width !== width * pixelRatio || canvas.height !== height * pixelRatio) { canvas.width = width * pixelRatio; canvas.height = height * pixelRatio; }
   const context = canvas.getContext("2d"); context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0); context.clearRect(0, 0, width, height); context.fillStyle = "#101113"; context.fillRect(0, 0, width, height);
-  const center = height / 2; context.strokeStyle = "rgba(255,255,255,.10)"; context.lineWidth = 1; context.beginPath(); context.moveTo(0, center); context.lineTo(width, center); context.stroke();
   const isRecording = Boolean(state.audio); const isPlaying = Boolean(state.playing); const cursorRatio = isRecording ? 1 : isPlaying ? state.playbackProgress : 0;
   elements.waveCursor.classList.toggle("active", isRecording || isPlaying); elements.waveCursor.classList.toggle("playing", isPlaying); elements.waveCursor.style.left = `${Math.max(0, Math.min(width - 1, Math.round(cursorRatio * width)))}px`;
-  if (!state.wave.length) return;
-  const maxPoints = Math.max(1, Math.min(state.wave.length, Math.floor(width))); const step = state.wave.length / maxPoints; const maxHeight = height * .44; const points = [];
-  for (let index = 0; index < maxPoints; index += 1) { const start = Math.floor(index * step); const end = Math.max(start + 1, Math.floor((index + 1) * step)); let amplitude = 0; for (let sample = start; sample < end && sample < state.wave.length; sample += 1) amplitude = Math.max(amplitude, state.wave[sample] || 0); points.push({ x: index * (width / maxPoints), amplitude: Math.max(amplitude, .015) }); }
-  const upperPath = new Path2D(); const lowerPath = new Path2D(); upperPath.moveTo(0, center); points.forEach((point) => upperPath.lineTo(point.x, center - point.amplitude * maxHeight)); upperPath.lineTo(width, center); lowerPath.moveTo(width, center); points.slice().reverse().forEach((point) => lowerPath.lineTo(point.x, center + point.amplitude * maxHeight)); lowerPath.lineTo(0, center);
-  const waveform = new Path2D(); waveform.addPath(upperPath); waveform.addPath(lowerPath); context.fillStyle = "#42d66b"; context.fill(waveform); context.globalAlpha = .15; context.fillStyle = "#ffffff"; context.fill(upperPath); context.globalAlpha = 1;
+  const waveChannels = state.waveChannels?.length ? state.waveChannels : [[]];
+  const lanes = window.DesktopWaveformChannels.createWaveLaneLayout(height, waveChannels.length);
+  lanes.forEach((lane, channelIndex) => {
+    const samples = waveChannels[channelIndex] || [];
+    context.strokeStyle = "rgba(255,255,255,.10)"; context.lineWidth = 1; context.beginPath(); context.moveTo(0, lane.center); context.lineTo(width, lane.center); context.stroke();
+    if (!samples.length) return;
+    const maxPoints = Math.max(1, Math.min(samples.length, Math.floor(width))); const step = samples.length / maxPoints; const points = [];
+    for (let index = 0; index < maxPoints; index += 1) { const start = Math.floor(index * step); const end = Math.max(start + 1, Math.floor((index + 1) * step)); let amplitude = 0; for (let sample = start; sample < end && sample < samples.length; sample += 1) amplitude = Math.max(amplitude, samples[sample] || 0); points.push({ x: index * (width / maxPoints), amplitude: Math.max(amplitude, .015) }); }
+    const upperPath = new Path2D(); const lowerPath = new Path2D(); upperPath.moveTo(0, lane.center); points.forEach((point) => upperPath.lineTo(point.x, lane.center - point.amplitude * lane.maxAmplitude)); upperPath.lineTo(width, lane.center); lowerPath.moveTo(width, lane.center); points.slice().reverse().forEach((point) => lowerPath.lineTo(point.x, lane.center + point.amplitude * lane.maxAmplitude)); lowerPath.lineTo(0, lane.center);
+    const waveform = new Path2D(); waveform.addPath(upperPath); waveform.addPath(lowerPath); context.fillStyle = "#42d66b"; context.fill(waveform); context.globalAlpha = .15; context.fillStyle = "#ffffff"; context.fill(upperPath); context.globalAlpha = 1;
+  });
 }
 
 async function startRecording() {
@@ -412,10 +419,11 @@ async function startRecording() {
     let captureNode;
     if (plan.isMultiChannel) { const merger = audio.createChannelMerger(plan.channelCount); splitters.forEach((splitter, index) => splitter.connect(merger, 0, index)); captureNode = merger; }
     else { const mixer = audio.createGain(); mixer.gain.value = 1 / splitters.length; splitters.forEach((splitter) => splitter.connect(mixer, 0, 0)); captureNode = mixer; }
-    const analyser = audio.createAnalyser(); const processor = audio.createScriptProcessor(4096, plan.channelCount, 1); const silence = audio.createGain(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = .75; silence.gain.value = 0;
-    state.audio = audio; state.analyser = analyser; state.mediaStreams = streams; state.recordingChannels = plan.channelCount; state.chunks = Array.from({ length: plan.channelCount }, () => []); state.wave = [];
+    const channelSplitter = audio.createChannelSplitter(plan.channelCount); const analysers = Array.from({ length: plan.channelCount }, () => { const analyser = audio.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = .75; return analyser; }); const processor = audio.createScriptProcessor(4096, plan.channelCount, 1); const silence = audio.createGain(); silence.gain.value = 0;
+    captureNode.connect(channelSplitter); analysers.forEach((analyser, index) => channelSplitter.connect(analyser, index));
+    state.audio = audio; state.analysers = analysers; state.mediaStreams = streams; state.recordingChannels = plan.channelCount; state.chunks = Array.from({ length: plan.channelCount }, () => []); state.waveChannels = window.DesktopWaveformChannels.createWaveChannels(plan.channelCount);
     processor.onaudioprocess = (event) => { for (let channel = 0; channel < state.recordingChannels; channel += 1) state.chunks[channel].push(new Float32Array(event.inputBuffer.getChannelData(Math.min(channel, event.inputBuffer.numberOfChannels - 1)))); };
-    captureNode.connect(analyser); captureNode.connect(processor); processor.connect(silence); silence.connect(audio.destination); state.audioNode = { sources, splitters, captureNode, analyser, processor, silence }; startRealtimeWaveform(); scheduleWaveDraw();
+    captureNode.connect(processor); processor.connect(silence); silence.connect(audio.destination); state.audioNode = { sources, splitters, captureNode, channelSplitter, analysers, processor, silence }; startRealtimeWaveform(); scheduleWaveDraw();
   } catch (error) { sources.forEach((source) => source.disconnect()); splitters.forEach((splitter) => splitter.disconnect()); streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); await audio.close(); throw error; }
   elements.recordButton.textContent = t("stopRecording"); setRecordPhase(settings.leadingSilenceMs ? "leading" : "recording", settings.leadingSilenceMs); await bridge.sync.state({ state: settings.leadingSilenceMs ? "leading" : "recording", sentenceIndex: state.currentIndex });
   if (settings.leadingSilenceMs) state.leadingTimer = setTimeout(() => { if (state.audio) { setRecordPhase("recording"); bridge.sync.state({ state: "recording", sentenceIndex: state.currentIndex }); } }, settings.leadingSilenceMs);
@@ -427,7 +435,7 @@ function bytesToBase64(bytes) { let binary = ""; const size = 0x8000; for (let o
 
 async function stopRecording() {
   if (!state.audio) return; const settings = state.settings; if (state.leadingTimer) clearTimeout(state.leadingTimer); state.leadingTimer = null; setRecordPhase(settings.trailingSilenceMs ? "trailing" : "saving", settings.trailingSilenceMs); await bridge.sync.state({ state: settings.trailingSilenceMs ? "trailing" : "saving", sentenceIndex: state.currentIndex }); if (settings.trailingSilenceMs) await new Promise((resolve) => setTimeout(resolve, settings.trailingSilenceMs)); setRecordPhase("saving");
-  const audio = state.audio; const { sources, splitters, captureNode, analyser, processor, silence } = state.audioNode; const recordedChannels = state.recordingChannels; stopRealtimeWaveform(); sources.forEach((source) => source.disconnect()); splitters.forEach((splitter) => splitter.disconnect()); captureNode.disconnect(); analyser.disconnect(); processor.disconnect(); silence.disconnect(); state.mediaStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); await audio.close(); state.audio = null; state.analyser = null; state.audioNode = null; state.mediaStreams = []; scheduleWaveDraw();
+  const audio = state.audio; const { sources, splitters, captureNode, channelSplitter, analysers, processor, silence } = state.audioNode; const recordedChannels = state.recordingChannels; stopRealtimeWaveform(); sources.forEach((source) => source.disconnect()); splitters.forEach((splitter) => splitter.disconnect()); captureNode.disconnect(); channelSplitter.disconnect(); analysers.forEach((analyser) => analyser.disconnect()); processor.disconnect(); silence.disconnect(); state.mediaStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop())); await audio.close(); state.audio = null; state.analysers = []; state.audioNode = null; state.mediaStreams = []; scheduleWaveDraw();
   const sentence = currentSentence(); const bytes = encodeWav(state.chunks, recordedChannels, audio.sampleRate, settings.bitDepth); const result = await bridge.saveRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: sentence.index, base64: bytesToBase64(bytes) }); state.recorded.set(state.currentIndex, result.path); await persistTaskWorkspace(); elements.recordButton.textContent = t("startRecording"); setRecordPhase("saved"); await bridge.sync.state({ state: "ready", sentenceIndex: state.currentIndex });
   const nextIndex = getAutoNext(state.currentIndex, state.sentences.length); if (nextIndex === undefined) setMessage(`已保存：${result.fileName}。全部句子已完成；选择目标句后再次录制即可覆盖旧文件。`); else { state.currentIndex = nextIndex; setMessage(`已保存：${result.fileName}。已自动跳到第 ${nextIndex + 1} 句。`); } render();
 }
@@ -447,7 +455,7 @@ function waitForAudioMetadata(audio) {
 async function playCurrent(startRatio = 0) {
   const saved = await bridge.getRecording({ project: currentProject(), speaker: currentSpeaker(), sentenceIndex: currentSentence()?.index });
   if (!saved?.url) { setMessage("当前句尚未录制。", true); return; }
-  stopPlayback(); state.wave = []; scheduleWaveDraw();
+  stopPlayback(); state.waveChannels = [[]]; scheduleWaveDraw();
   try { await loadPlaybackWaveform(saved.url); } catch (error) { console.warn("无法解析播放波形", error); }
   const audio = new Audio(saved.url); audio.preload = "auto"; await waitForAudioMetadata(audio);
   const ratio = Math.min(1, Math.max(0, Number(startRatio) || 0));
@@ -487,7 +495,7 @@ async function resetCurrentTask({ resetIdentity }) {
   stopPlayback();
   if (state.sync.mode !== "idle") state.sync = await bridge.sync.stop();
   state.syncRecordingActive = false;
-  state.sentences = []; state.currentIndex = 0; state.scriptName = ""; state.recorded.clear(); state.wave = []; state.currentTaskId = createTaskId();
+  state.sentences = []; state.currentIndex = 0; state.scriptName = ""; state.recorded.clear(); state.waveChannels = [[]]; state.currentTaskId = createTaskId();
   if (resetIdentity) { elements.projectName.value = t("unnamedTask"); elements.speakerName.value = t("unnamedSpeaker"); elements.speakerGender.value = "其他"; elements.speakerAge.value = "0"; }
   setRecordPhase("ready"); render();
   if (resetIdentity) {
